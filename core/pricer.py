@@ -3,8 +3,12 @@
 from typing import Dict, Any
 
 # Official USD rates per 1,000,000 tokens
-# Rates are based on standard context window tiers (<= 128k / standard)
 PRICING_CATALOG_USD: Dict[str, Dict[str, float]] = {
+    "gemini-3.5-flash-lite": {
+        "input_per_1m": 0.075,
+        "output_per_1m": 0.30,
+        "thought_per_1m": 0.30,
+    },
     "gemini-2.5-flash": {
         "input_per_1m": 0.10,
         "output_per_1m": 0.40,
@@ -63,16 +67,6 @@ def calculate_cost_ntd(
 ) -> float:
     """
     Calculates cost in New Taiwan Dollars (TWD/NTD) based on token consumption.
-
-    Args:
-        model_name: Name of the Gemini model.
-        prompt_tokens: Input tokens count.
-        candidate_tokens: Output candidate tokens count (excluding thought tokens if separated).
-        thought_tokens: Thinking tokens count.
-        exchange_rate: USD to TWD conversion rate (default 32.0).
-
-    Returns:
-        Cost in TWD rounded to 6 decimal places.
     """
     rates = get_model_pricing(model_name)
 

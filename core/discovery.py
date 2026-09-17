@@ -8,6 +8,15 @@ logger = logging.getLogger("Model_Arbiter.discovery")
 # Default offline fallback model catalog in case API key is not present or offline execution is requested
 DEFAULT_MODELS = [
     {
+        "name": "gemini-3.5-flash-lite",
+        "display_name": "Gemini 3.5 Flash Lite",
+        "status": "ACTIVE",
+        "multimodal": True,
+        "deprecated": False,
+        "supports_thinking": False,
+        "description": "Next-gen ultra lightweight baseline multimodal model."
+    },
+    {
         "name": "gemini-2.5-flash",
         "display_name": "Gemini 2.5 Flash",
         "status": "ACTIVE",
@@ -67,12 +76,6 @@ DEFAULT_MODELS = [
 def list_candidate_models(api_key: str = None) -> list[dict]:
     """
     Fetches official Google Gemini models and returns active candidate multimodal models.
-
-    Args:
-        api_key: Optional Gemini API Key. If not provided, reads from GEMINI_API_KEY env var.
-
-    Returns:
-        List of dictionaries containing model attributes (name, display_name, status, multimodal, deprecated, supports_thinking).
     """
     key = api_key or os.environ.get("GEMINI_API_KEY")
 
@@ -88,10 +91,8 @@ def list_candidate_models(api_key: str = None) -> list[dict]:
         raw_models = client.models.list()
 
         for m in raw_models:
-            # Model name normalization (e.g., 'models/gemini-2.0-flash' -> 'gemini-2.0-flash')
             name = m.name.replace("models/", "") if hasattr(m, "name") and m.name else str(m)
             
-            # Check capabilities
             supported_actions = getattr(m, "supported_generation_methods", []) or []
             if "generateContent" not in supported_actions and "generate_content" not in supported_actions:
                 continue
@@ -99,24 +100,20 @@ def list_candidate_models(api_key: str = None) -> list[dict]:
             display_name = getattr(m, "display_name", name)
             description = getattr(m, "description", "")
             
-            # Deprecation check
             deprecated = False
             if "deprecated" in name.lower() or "legacy" in name.lower() or "1.0" in name:
                 deprecated = True
 
-            # Multimodal check
             multimodal = True
             if "text-only" in description.lower() or "bison" in name or "gecko" in name:
                 multimodal = False
 
-            # Active filter
             status = "ACTIVE" if not deprecated else "DEPRECATED"
 
-            # Filter out non-target embeddings/imagen/aqa models
             if any(term in name.lower() for term in ["embedding", "imagen", "aqa", "tts", "stt"]):
                 continue
 
-            supports_thinking = "2.0" in name or "2.5" in name or "thinking" in name.lower()
+            supports_thinking = any(v in name for v in ["2.0", "2.5", "3.0", "3.5"]) or "thinking" in name.lower()
 
             candidate_list.append({
                 "name": name,

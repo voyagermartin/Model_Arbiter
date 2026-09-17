@@ -25,7 +25,7 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-# Custom Styling (Glassmorphism & Metric Cards)
+# Custom Styling
 st.markdown("""
 <style>
     .main-title {
@@ -41,31 +41,13 @@ st.markdown("""
         font-size: 1.05rem;
         margin-bottom: 1.5rem;
     }
-    .metric-card {
-        background: rgba(255, 255, 255, 0.05);
-        border: 1px solid rgba(229, 231, 235, 0.2);
-        border-radius: 12px;
-        padding: 1.25rem;
-        box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
-        text-align: center;
-    }
-    .metric-value {
-        font-size: 1.8rem;
-        font-weight: 700;
-        color: #10B981;
-    }
-    .metric-label {
-        font-size: 0.875rem;
-        color: #9CA3AF;
-        margin-top: 0.25rem;
-    }
-    .champion-banner {
-        background: linear-gradient(135deg, #059669 0%, #10B981 100%);
-        color: white;
-        padding: 1.25rem;
-        border-radius: 12px;
-        margin-top: 1rem;
+    .path-hint-box {
+        background-color: rgba(59, 130, 246, 0.1);
+        border-left: 4px solid #3B82F6;
+        padding: 0.85rem;
+        border-radius: 6px;
         margin-bottom: 1rem;
+        font-size: 0.9rem;
     }
 </style>
 """, unsafe_allow_html=True)
@@ -103,6 +85,24 @@ def main():
     )
 
     st.sidebar.markdown("---")
+    
+    # Image Upload & Physical Path Hint
+    st.sidebar.subheader("📂 測試圖檔設定")
+    uploaded_file = st.sidebar.file_uploader(
+        "上傳護照測試圖片 (支援 JPG/PNG)",
+        type=["jpg", "jpeg", "png"],
+        help="選擇真實護照圖片檔進行 VLM Multimodal 跑分"
+    )
+
+    st.sidebar.markdown("""
+    <div class="path-hint-box">
+        💡 <b>實體圖片目錄提示：</b><br/>
+        可將測試圖片放置於目錄：<br/>
+        <code>suites/pp_auto/images/</code><br/>
+        <i>若未上傳且目錄為空，系統自動啟用內建備援 Mock 合成圖片。</i>
+    </div>
+    """, unsafe_allow_html=True)
+
     st.sidebar.info("💡 **自動化套利機制**：\n當候選模型達成 100% 通過率時，系統自動推薦單本 TWD 成本最低者。")
 
     # ---------------------------------------------------------
@@ -110,6 +110,12 @@ def main():
     # ---------------------------------------------------------
     st.markdown('<div class="main-title">Model_Arbiter 模型自動跑分與成本精算面板</div>', unsafe_allow_html=True)
     st.markdown('<div class="subtitle">Google Gemini 多模態模型自動化跑分、思考 Token 精算與最適模型推薦引擎</div>', unsafe_allow_html=True)
+
+    # Read uploaded image bytes if present
+    custom_image_bytes = uploaded_file.getvalue() if uploaded_file else None
+
+    if uploaded_file:
+        st.info(f"📸 已載入自訂上傳圖片: `{uploaded_file.name}` ({len(custom_image_bytes)} bytes)")
 
     # Action Button
     start_benchmark = st.button("🚀 開始全自動跑分與成本仲裁", type="primary", use_container_width=True)
@@ -121,11 +127,10 @@ def main():
         api_key = api_key_input.strip() if api_key_input else None
 
         if not is_mock and not api_key:
-            st.error("⚠️ 請在側邊欄輸入有效的 Gemini API Key 或切換為「離線快速模擬 (Mock)」模式！")
+            st.error("⚠️ [環境階段] 請在側邊欄輸入有效的 Gemini API Key 或切換為「離線快速模擬 (Mock)」模式！")
             return
 
-        # Fetch active candidate models
-        with st.spinner("🔍 正在檢索 Gemini 活躍多模態模型清單..."):
+        with st.spinner("🔍 正在檢索 Gemini 活躍多模態模型清單 (包含 gemini-3.5-flash-lite 等主力模型)..."):
             discovered = list_candidate_models(api_key=api_key)
             candidate_models = [m["name"] for m in discovered if not m.get("deprecated")]
 
@@ -140,23 +145,22 @@ def main():
         for idx, model_name in enumerate(candidate_models):
             status_text.markdown(f"⏳ **正在跑分測試模型 [{idx + 1}/{total_models}]**: `{model_name}`...")
             
-            # Execute benchmark for this specific model
             res_list = run_suite_evaluation(
                 suite_name=suite_option,
                 api_key=api_key,
                 candidate_models=[model_name],
-                mock=is_mock
+                mock=is_mock,
+                image_bytes=custom_image_bytes
             )
             if res_list:
                 suite_results.append(res_list[0])
 
             progress_bar.progress(int(((idx + 1) / total_models) * 100))
-            time.sleep(0.1)
+            time.sleep(0.05)
 
         status_text.success("✅ 跑分測試全數完成！")
         progress_bar.progress(100)
 
-        # Store in session state
         st.session_state["benchmark_results"] = suite_results
         st.session_state["suite_name"] = suite_option
 
@@ -170,10 +174,8 @@ def main():
         st.markdown("---")
         st.subheader("📊 性價比天梯榜 (Benchmark Leaderboard)")
 
-        # Sort results: Pass Rate DESC, Cost ASC, Latency ASC
         sorted_results = sorted(results, key=lambda x: (-x["pass_rate"], x["cost_ntd"], x["avg_latency_sec"]))
 
-        # Build Dataframe table rows
         table_rows = []
         for rank, r in enumerate(sorted_results, 1):
             is_champion = (rank == 1 and r["pass_rate"] == 100.0)
@@ -194,7 +196,25 @@ def main():
         st.dataframe(table_rows, use_container_width=True)
 
         # ---------------------------------------------------------
-        # 5. 最佳套利推薦卡片 (Champion Recommendation Card)
+        # 5. 例外與錯誤日誌排查區 (Detailed Diagnostic Error Section)
+        # ---------------------------------------------------------
+        failed_models = [r for r in results if r["pass_rate"] < 100.0 or any(c.get("error_details") for c in r.get("case_details", []))]
+
+        if failed_models:
+            st.markdown("### ⚠️ 詳細錯誤日誌與階段排查 (Diagnostic Tracing)")
+            for fm in failed_models:
+                for c in fm.get("case_details", []):
+                    if c.get("error_details"):
+                        stage = c.get("error_stage", "[未知階段]")
+                        with st.expander(f"🔴 檢視模型 `{fm['model_name']}` 錯誤紀錄 ({stage})"):
+                            st.markdown(f"**失敗階段**: `{stage}`")
+                            st.markdown(f"**圖片來源**: `{c.get('image_source', '未知')}`")
+                            st.error(f"**錯誤訊息**: {c.get('error_details')}")
+                            if c.get("traceback"):
+                                st.code(c["traceback"], language="python")
+
+        # ---------------------------------------------------------
+        # 6. 最佳套利推薦卡片 (Champion Recommendation Card)
         # ---------------------------------------------------------
         eligible = [r for r in results if r["pass_rate"] == 100.0]
 
@@ -230,16 +250,13 @@ def main():
                 f"**[仲裁結論]** 模型 `{model_name}` 達成 100% 驗收通過率，且每千次辨識成本僅新台幣 **NT${cost_per_1k_ntd:.4f}**，為最佳極致降本選擇！"
             )
 
-            # ---------------------------------------------------------
-            # 6. 一鍵匯出 Active Config 按鈕 (Export Button)
-            # ---------------------------------------------------------
             st.markdown("### 💾 設定檔動態覆寫與同步")
             if st.button("📥 將最佳推薦覆寫至 active_configs/pp_auto_model.json", type="secondary"):
                 exported = recommend_and_export_active_model(suite_name=suite_name, results=results)
                 if exported:
                     st.toast(f"✅ 成功將最佳模型 [{model_name}] 匯出至 active_configs/pp_auto_model.json！", icon="🎉")
         else:
-            st.warning("⚠️ 沒有任何模型達成 100% 通過率門檻，無法進行自動套利覆寫。")
+            st.warning("⚠️ 沒有任何模型達成 100% 通過率門檻，請檢查上方【詳細錯誤日誌與階段排查】區塊進行除錯。")
 
 
 if __name__ == "__main__":

@@ -7,7 +7,6 @@ import logging
 from datetime import datetime
 from typing import List, Dict, Any, Optional
 
-# Ensure UTF-8 output encoding on Windows consoles
 if hasattr(sys.stdout, 'reconfigure'):
     sys.stdout.reconfigure(encoding='utf-8', errors='replace')
 if hasattr(sys.stderr, 'reconfigure'):
@@ -30,7 +29,8 @@ def run_suite_evaluation(
     suite_name: str = "pp_auto",
     api_key: Optional[str] = None,
     candidate_models: Optional[List[str]] = None,
-    mock: bool = False
+    mock: bool = False,
+    image_bytes: Optional[bytes] = None
 ) -> List[Dict[str, Any]]:
     """
     Executes benchmark test suite across all active candidate models.
@@ -41,7 +41,6 @@ def run_suite_evaluation(
     test_cases = load_test_cases()
     if not candidate_models:
         discovered = list_candidate_models(api_key=api_key)
-        # Filter active multimodal models
         candidate_models = [m["name"] for m in discovered if not m.get("deprecated")]
 
     suite_results = []
@@ -56,7 +55,13 @@ def run_suite_evaluation(
         case_details = []
 
         for case in test_cases:
-            res = execute_test_case(model_name=model_name, test_case=case, api_key=api_key, mock=mock)
+            res = execute_test_case(
+                model_name=model_name,
+                test_case=case,
+                api_key=api_key,
+                mock=mock,
+                image_bytes=image_bytes
+            )
             if res["passed"]:
                 passed_cases += 1
             total_prompt_tokens += res["prompt_tokens"]
@@ -68,7 +73,6 @@ def run_suite_evaluation(
         pass_rate = round((passed_cases / total_cases) * 100.0, 2) if total_cases > 0 else 0.0
         avg_latency = round(total_latency / total_cases, 3) if total_cases > 0 else 0.0
 
-        # Calculate exact cost in TWD for this suite run
         cost_ntd = calculate_cost_ntd(
             model_name=model_name,
             prompt_tokens=total_prompt_tokens,
@@ -123,7 +127,6 @@ def print_leaderboard(suite_name: str, results: List[Dict[str, Any]]) -> None:
     if HAS_TABULATE:
         print(tabulate(table_data, headers=headers, tablefmt="fancy_grid"))
     else:
-        # Standard format fallback
         header_line = " | ".join(f"{h:<14}" for h in headers)
         print(header_line)
         print("-" * len(header_line))
