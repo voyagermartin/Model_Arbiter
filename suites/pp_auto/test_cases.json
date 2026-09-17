@@ -1,0 +1,46 @@
+[
+  {
+    "id": "TWN_PP_001",
+    "description": "Taiwan Passport Standard Test Case - Wang Hsiao-Ming",
+    "image_mock_data": {
+      "surname": "WANG",
+      "given_names": "HSIAO MING",
+      "passport_number": "350123456",
+      "nationality": "TWN",
+      "date_of_birth": "1990-01-01",
+      "sex": "M",
+      "expiry_date": "2030-01-01",
+      "mrz_line1": "P<TWNWANG<<HSIAO<MING<<<<<<<<<<<<<<<<<<<<<<<",
+      "mrz_line2": "3501234561TWN9001011M3001019<<<<<<<<<<<<<<<4"
+    },
+    "expected_ground_truth": {
+      "full_name_en": "WANG HSIAO MING",
+      "passport_number": "350123456",
+      "nationality": "TWN",
+      "mrz_line1": "P<TWNWANG<<HSIAO<MING<<<<<<<<<<<<<<<<<<<<<<<",
+      "mrz_line2": "3501234561TWN9001011M3001019<<<<<<<<<<<<<<<4"
+    }
+  },
+  {
+    "id": "USA_PP_002",
+    "description": "USA Passport Standard Test Case - Smith John David",
+    "image_mock_data": {
+      "surname": "SMITH",
+      "given_names": "JOHN DAVID",
+      "passport_number": "A12345678",
+      "nationality": "USA",
+      "date_of_birth": "1985-05-15",
+      "sex": "M",
+      "expiry_date": "2028-10-20",
+      "mrz_line1": "P<USASMITH<<JOHN<DAVID<<<<<<<<<<<<<<<<<<<<<<",
+      "mrz_line2": "A123456784USA8505154M2810205<<<<<<<<<<<<<<<4"
+    },
+    "expected_ground_truth": {
+      "full_name_en": "SMITH JOHN DAVID",
+      "passport_number": "A12345678",
+      "nationality": "USA",
+      "mrz_line1": "P<USASMITH<<JOHN<DAVID<<<<<<<<<<<<<<<<<<<<<<",
+      "mrz_line2": "A123456784USA8505154M2810205<<<<<<<<<<<<<<<4"
+    }
+  }
+]
