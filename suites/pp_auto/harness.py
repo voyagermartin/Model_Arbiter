@@ -198,6 +198,45 @@ def get_test_image_bytes(
     return generate_synthetic_passport_image(), "備援 Mock 合成圖片 (Synthetic Sample)"
 
 
+def call_gemini_with_resilience(client, model_name: str, contents: Any, config: Any, max_retries: int = 3):
+    """
+    具備指數退避 (Exponential Backoff) 的穩健呼叫器，專門抵禦 503 High Demand 與 429 Rate Limit
+    """
+    try:
+        from google.genai import errors
+    except ImportError:
+        errors = None
+
+    for attempt in range(max_retries):
+        try:
+            return client.models.generate_content(
+                model=model_name,
+                contents=contents,
+                config=config
+            )
+        except Exception as e:
+            is_server_error = errors and isinstance(e, errors.ServerError)
+            is_client_error = errors and isinstance(e, errors.ClientError)
+            
+            err_str = str(e)
+            err_code = getattr(e, "code", None)
+
+            if is_server_error or "503" in err_str or err_code == 503 or "UNAVAILABLE" in err_str:
+                wait_time = (2 ** attempt) + 1  # 2s, 3s, 5s...
+                logging.warning(f"⚠️ [{model_name}] 遭遇 503 伺服器滿載，將於 {wait_time} 秒後重試 (第 {attempt+1}/{max_retries} 次)...")
+                time.sleep(wait_time)
+                if attempt == max_retries - 1:
+                    raise e
+            elif is_client_error or "429" in err_str or err_code == 429 or "RESOURCE_EXHAUSTED" in err_str:
+                wait_time = (2 ** attempt) + 2  # 3s, 4s, 6s...
+                logging.warning(f"⚠️ [{model_name}] 觸發 429 速率限制，退避等待 {wait_time} 秒...")
+                time.sleep(wait_time)
+                if attempt == max_retries - 1:
+                    raise e
+            else:
+                raise e
+
+
 def load_test_cases() -> List[Dict[str, Any]]:
     """Loads ground truth test cases from test_cases.json."""
     current_dir = os.path.dirname(os.path.abspath(__file__))
@@ -317,8 +356,9 @@ def execute_test_case(
 
         try:
             config = types.GenerateContentConfig(**config_kwargs)
-            response = client.models.generate_content(
-                model=model_name,
+            response = call_gemini_with_resilience(
+                client=client,
+                model_name=model_name,
                 contents=[pil_img, prompt],
                 config=config
             )
@@ -327,8 +367,9 @@ def execute_test_case(
                 logger.info(f"Model '{model_name}' rejected thinking_config parameter ({api_exc}). Retrying without thinking_config...")
                 config_kwargs.pop("thinking_config", None)
                 config = types.GenerateContentConfig(**config_kwargs)
-                response = client.models.generate_content(
-                    model=model_name,
+                response = call_gemini_with_resilience(
+                    client=client,
+                    model_name=model_name,
                     contents=[pil_img, prompt],
                     config=config
                 )

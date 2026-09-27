@@ -165,4 +165,5 @@ python -m py_compile run.py web_runner.py core/*.py suites/pp_auto/*.py
 - **[Streamlit UI & UI Refactoring]**：重構 `web_runner.py` 面板，完全移除舊有 `st.file_uploader` 手動上傳與硬編碼目錄提示，升級為「`📁 基準題庫與環境規格 (Benchmark Suite Status)`」動態狀態卡片，即時展示當前套件之 Thinking Budget、Temperature 與已載入黃金樣本數，並整合「`🔄 自 Registry 同步最新考卷`」與 `st.rerun()` 即時刷新機制。
 - **[Model Catalog & EOL Radar Engine]**：升級 `core/discovery.py` 具備市場情報雷達，實裝 `probe_model_status` 輕量健康探針、`NEW_DISCOVERED` 新模型自動探測與 24 小時 JSON 快取持久化 (`core/model_registry.json`)；並在 `web_runner.py` 實裝模型動態徽章標籤（🟢 現役 / 🚀 新發佈 / 🔴 已除役）與生產環境 **EOL 生命週期警告橫幅**（當 `active_configs/` 中的生產模型下線時，頂部主動彈出紅色警告提示並導引一鍵跑分覆寫）。
 - **[Arbitrage Recommendation Benchmark Verification]**：成功同步 PP_AUTO 上報之 `ddd93a4b` 真實題庫與 Prompt，實測 `gemini-3.5-flash-lite` 與 `gemini-3.8-flash` 跑分均達成 100% 通過率，並自動匯出最適推薦 active config `active_configs/pp_auto_model.json`。
+- **[API Resilience Engine]**：在 `suites/pp_auto/harness.py` 實裝 `call_gemini_with_resilience` 指數退避 (Exponential Backoff) 重試機制，精確捕捉 `503 Service Unavailable`（熱門模型高流量滿載）與 `429 Too Many Requests`（速率限制）異常，於遭遇 503 時自動退避等待（2s, 3s, 5s...）並記錄警示 Log，順利保障 `gemini-3.8-flash` 等熱門模型完成跑分登上天梯榜。
 - **[Version Control]**：通過全模組 `py_compile` 零語法錯誤驗證。
