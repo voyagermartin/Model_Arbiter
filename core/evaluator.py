@@ -21,7 +21,7 @@ except ImportError:
 import importlib
 
 from core.pricer import calculate_cost_ntd, get_model_pricing
-from core.discovery import list_candidate_models
+from core.discovery import list_candidate_models, get_active_models_radar, probe_model_status
 
 logger = logging.getLogger("Model_Arbiter.evaluator")
 
@@ -43,13 +43,31 @@ def run_suite_evaluation(
 ) -> List[Dict[str, Any]]:
     """
     Executes benchmark test suite across all active candidate models dynamically.
+    Automatically filters out DEPRECATED models prior to test execution.
     """
     suite_module = load_suite_module(suite_name)
     test_cases = suite_module.load_test_cases()
 
+    radar_models = get_active_models_radar(api_key=api_key)
+
+    if candidate_models:
+        valid_models = []
+        for m_id in candidate_models:
+            norm_id = m_id.lower().replace("models/", "").strip()
+            info = radar_models.get(norm_id) or probe_model_status(norm_id, api_key=api_key)
+            if info.get("status") == "DEPRECATED" or info.get("deprecated"):
+                rep = info.get("suggested_replacement") or "gemini-3.8-flash"
+                logger.warning(f"⚠️ [Pre-flight Filter] 自動排除已除役模型 (DEPRECATED): {m_id} (請改用 {rep})")
+            else:
+                valid_models.append(m_id)
+        candidate_models = valid_models
+
     if not candidate_models:
         discovered = list_candidate_models(api_key=api_key)
-        candidate_models = [m["name"] for m in discovered if not m.get("deprecated")]
+        candidate_models = [m["name"] for m in discovered if not m.get("deprecated") and m.get("status") != "DEPRECATED"]
+
+    if not candidate_models:
+        candidate_models = ["gemini-3.8-flash", "gemini-3.5-flash-lite"]
 
     suite_results = []
 

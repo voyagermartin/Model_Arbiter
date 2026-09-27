@@ -125,13 +125,8 @@ def main():
         help="輸入 Google Gemini API Key (若已設定 GEMINI_API_KEY 環境變數則自動帶入)"
     )
 
-    # Execution Mode Switch
-    mode_option = st.sidebar.radio(
-        "⚙️ 執行模式 (Execution Mode)",
-        ["🔘 離線快速模擬 (Mock)", "🔴 真實 API 跑分"],
-        index=0
-    )
-    is_mock = "Mock" in mode_option
+    # Execution Mode (UI strictly defaults to Live API runner)
+    is_mock = False
 
     # Benchmark Suite Selector
     suite_option = st.sidebar.selectbox(
@@ -148,6 +143,12 @@ def main():
         for m in discovered_models[:10]:
             badge = get_model_status_badge(m)
             st.markdown(f"- {badge}")
+        
+        refresh_radar = st.button("🔄 重新整理市場模型雷達", use_container_width=True)
+        if refresh_radar:
+            with st.spinner("📡 正在向 Google API 探測最新可用模型..."):
+                list_candidate_models(api_key=api_key, force_refresh=True, probe=True)
+            st.rerun()
 
     # ---------------------------------------------------------
     # 題庫狀態與同步控制卡片 (Benchmark Suite Status & Sync Control)
@@ -221,13 +222,13 @@ def main():
     # 3. 跑分邏輯執行 (Benchmark Execution)
     # ---------------------------------------------------------
     if start_benchmark:
-        if not is_mock and not api_key:
-            st.error("⚠️ [環境階段] 請在側邊欄輸入有效的 Gemini API Key 或切換為「離線快速模擬 (Mock)」模式！")
+        if not api_key:
+            st.error("⚠️ [環境階段] 請在側邊欄輸入有效的 Gemini API Key！")
             return
 
-        with st.spinner("🔍 正在執行市場模型雷達探針，檢索 Gemini 現役多模態模型 (包含 gemini-3.8-flash, 3.5-flash-lite 等主力模型)..."):
+        with st.spinner("🔍 正在執行市場模型雷達探針，過濾已除役模型並檢索 Gemini 現役多模態模型 (包含 gemini-3.8-flash, 3.5-flash-lite 等主力模型)..."):
             discovered = list_candidate_models(api_key=api_key, force_refresh=True, probe=True)
-            active_models = [m for m in discovered if not m.get("deprecated")]
+            active_models = [m for m in discovered if not m.get("deprecated") and m.get("status") != "DEPRECATED"]
             candidate_models = [m["name"] for m in active_models]
 
         st.markdown(f"**發現 `{len(candidate_models)}` 個活躍現役多模態模型**: `{', '.join(candidate_models)}`")

@@ -324,3 +324,15 @@ def get_model_status_badge(model: Dict[str, Any]) -> str:
         return f"🚀 {name} (新發佈)"
     else:
         return f"🟢 {name} (現役)"
+
+
+def get_active_models_radar(api_key: Optional[str] = None, force_refresh: bool = False) -> Dict[str, Dict[str, Any]]:
+    """
+    Returns dictionary mapping model_name -> model info dict for fast status lookup and pre-flight filtering.
+    """
+    candidates = list_candidate_models(api_key=api_key, force_refresh=force_refresh, probe=False)
+    radar_map = {}
+    for m in candidates:
+        name = m.get("name", "").lower().replace("models/", "").strip()
+        radar_map[name] = m
+    return radar_map
