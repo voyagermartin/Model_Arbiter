@@ -137,6 +137,7 @@ def main():
 
     # Discovered Models & Status Radar
     api_key = api_key_input.strip() if api_key_input else None
+    discovered_models = list_candidate_models(api_key=api_key, probe=False)
     active_radar_models = [m for m in discovered_models if not m.get("deprecated") and m.get("status") != "DEPRECATED"]
     deprecated_radar_models = [m for m in discovered_models if m.get("deprecated") or m.get("status") == "DEPRECATED"]
 
