@@ -7,14 +7,14 @@ import sys
 import json
 import time
 from datetime import datetime
-from typing import Dict, Any
+from typing import Dict, Any, List, Tuple, Optional
 import streamlit as st
 
 # Ensure UTF-8 output encoding on Windows
 if hasattr(sys.stdout, 'reconfigure'):
     sys.stdout.reconfigure(encoding='utf-8', errors='replace')
 
-from core.discovery import list_candidate_models
+from core.discovery import list_candidate_models, get_model_status_badge, probe_model_status
 from core.pricer import calculate_cost_ntd, get_model_pricing
 from core.evaluator import run_suite_evaluation, recommend_and_export_active_model
 
@@ -83,6 +83,32 @@ def get_suite_status(suite_name: str) -> Dict[str, Any]:
     }
 
 
+def check_active_config_eol(suite_name: str, candidate_models: List[Dict[str, Any]]) -> Tuple[Optional[str], bool, Optional[str]]:
+    """Checks if currently active recommended model in active_configs is DEPRECATED/offline."""
+    config_file = os.path.join("active_configs", f"{suite_name}_model.json")
+    if not os.path.exists(config_file):
+        return None, False, None
+
+    try:
+        with open(config_file, "r", encoding="utf-8") as f:
+            data = json.load(f)
+            rec_model = data.get("recommended_model")
+            if not rec_model:
+                return None, False, None
+
+            matching = next((m for m in candidate_models if m["name"] == rec_model), None)
+            if matching and (matching.get("status") == "DEPRECATED" or matching.get("deprecated")):
+                rep = matching.get("suggested_replacement") or "gemini-3.8-flash"
+                return rec_model, True, rep
+            
+            if "2.5-flash" in rec_model or "1.0" in rec_model:
+                return rec_model, True, "gemini-3.8-flash"
+
+            return rec_model, False, None
+    except Exception:
+        return None, False, None
+
+
 def main():
     # ---------------------------------------------------------
     # 1. 側邊欄設定 (Sidebar Settings)
@@ -113,6 +139,15 @@ def main():
         ["pp_auto"],
         format_func=lambda x: "護照/證件辨識套件 (pp_auto)" if x == "pp_auto" else x
     )
+
+    # Discovered Models & Status Radar
+    api_key = api_key_input.strip() if api_key_input else None
+    discovered_models = list_candidate_models(api_key=api_key, probe=False)
+
+    with st.sidebar.expander("📡 市場模型雷達 (Model Radar)", expanded=False):
+        for m in discovered_models[:10]:
+            badge = get_model_status_badge(m)
+            st.markdown(f"- {badge}")
 
     # ---------------------------------------------------------
     # 題庫狀態與同步控制卡片 (Benchmark Suite Status & Sync Control)
@@ -162,10 +197,22 @@ def main():
     st.sidebar.info("💡 **自動化套利機制**：\n當候選模型達成 100% 通過率時，系統自動推薦單本 TWD 成本最低者。")
 
     # ---------------------------------------------------------
-    # 2. 主畫面標題與簡介 (Main Header)
+    # 2. 主畫面標題與簡介 (Main Header & EOL Alert Banner)
     # ---------------------------------------------------------
     st.markdown('<div class="main-title">Model_Arbiter 模型自動跑分與成本精算面板</div>', unsafe_allow_html=True)
     st.markdown('<div class="subtitle">Google Gemini 多模態模型自動化跑分、思考 Token 精算與最適模型推薦引擎</div>', unsafe_allow_html=True)
+
+    # Production Config EOL Alert Banner
+    active_model_name, is_eol, replacement_model = check_active_config_eol(suite_option, discovered_models)
+    if is_eol:
+        st.error(
+            f"🚨 **[EOL 生命週期警示]** 現役生產環境模型 `{active_model_name}` 已被官方下線/停用！\n\n"
+            f"💡 **官方建議替代模型**: `{replacement_model}`\n\n"
+            f"請立即點擊下方「🚀 開始全自動跑分與成本仲裁」重新評測，並將最適模型覆寫至生產設定檔！",
+            icon="⚠️"
+        )
+    elif active_model_name:
+        st.info(f"✅ **[生產環境模型狀態]** 現役設定檔模型 `{active_model_name}` 運作良好，符合極致套利規範。")
 
     # Action Button
     start_benchmark = st.button("🚀 開始全自動跑分與成本仲裁", type="primary", use_container_width=True)
@@ -174,17 +221,16 @@ def main():
     # 3. 跑分邏輯執行 (Benchmark Execution)
     # ---------------------------------------------------------
     if start_benchmark:
-        api_key = api_key_input.strip() if api_key_input else None
-
         if not is_mock and not api_key:
             st.error("⚠️ [環境階段] 請在側邊欄輸入有效的 Gemini API Key 或切換為「離線快速模擬 (Mock)」模式！")
             return
 
-        with st.spinner("🔍 正在檢索 Gemini 活躍多模態模型清單 (包含 gemini-3.5-flash-lite 等主力模型)..."):
-            discovered = list_candidate_models(api_key=api_key)
-            candidate_models = [m["name"] for m in discovered if not m.get("deprecated")]
+        with st.spinner("🔍 正在執行市場模型雷達探針，檢索 Gemini 現役多模態模型 (包含 gemini-3.8-flash, 3.5-flash-lite 等主力模型)..."):
+            discovered = list_candidate_models(api_key=api_key, force_refresh=True, probe=True)
+            active_models = [m for m in discovered if not m.get("deprecated")]
+            candidate_models = [m["name"] for m in active_models]
 
-        st.markdown(f"**發現 `{len(candidate_models)}` 個活躍多模態模型**: `{', '.join(candidate_models)}`")
+        st.markdown(f"**發現 `{len(candidate_models)}` 個活躍現役多模態模型**: `{', '.join(candidate_models)}`")
 
         progress_bar = st.progress(0)
         status_text = st.empty()

@@ -1,0 +1,85 @@
+{
+  "last_probed_at": 1790509344.1734538,
+  "models": {
+    "gemini-3.8-flash": {
+      "name": "gemini-3.8-flash",
+      "display_name": "Gemini 3.8 Flash",
+      "status": "NEW_DISCOVERED",
+      "multimodal": true,
+      "deprecated": false,
+      "supports_thinking": true,
+      "suggested_replacement": null,
+      "description": "Official flagship fast multimodal reasoning model with extended thinking."
+    },
+    "gemini-3.5-flash-lite": {
+      "name": "gemini-3.5-flash-lite",
+      "display_name": "Gemini 3.5 Flash Lite",
+      "status": "ACTIVE",
+      "multimodal": true,
+      "deprecated": false,
+      "supports_thinking": true,
+      "suggested_replacement": null,
+      "description": "Next-gen ultra lightweight baseline multimodal reasoning model."
+    },
+    "gemini-1.5-flash": {
+      "name": "gemini-1.5-flash",
+      "display_name": "Gemini 1.5 Flash",
+      "status": "ACTIVE",
+      "multimodal": true,
+      "deprecated": false,
+      "supports_thinking": false,
+      "suggested_replacement": null,
+      "description": "Lightweight multimodal model optimized for speed."
+    },
+    "gemini-2.0-flash": {
+      "name": "gemini-2.0-flash",
+      "display_name": "Gemini 2.0 Flash",
+      "status": "ACTIVE",
+      "multimodal": true,
+      "deprecated": false,
+      "supports_thinking": true,
+      "suggested_replacement": null,
+      "description": "Fast multimodal workhorse model with thinking token capabilities."
+    },
+    "gemini-2.0-flash-lite": {
+      "name": "gemini-2.0-flash-lite",
+      "display_name": "Gemini 2.0 Flash Lite",
+      "status": "ACTIVE",
+      "multimodal": true,
+      "deprecated": false,
+      "supports_thinking": false,
+      "suggested_replacement": null,
+      "description": "Ultra lightweight cost-optimized multimodal model."
+    },
+    "gemini-1.5-pro": {
+      "name": "gemini-1.5-pro",
+      "display_name": "Gemini 1.5 Pro",
+      "status": "ACTIVE",
+      "multimodal": true,
+      "deprecated": false,
+      "supports_thinking": false,
+      "suggested_replacement": null,
+      "description": "Complex reasoning multimodal model with large context window."
+    },
+    "gemini-2.5-flash": {
+      "name": "gemini-2.5-flash",
+      "display_name": "Gemini 2.5 Flash",
+      "status": "DEPRECATED",
+      "multimodal": true,
+      "deprecated": true,
+      "supports_thinking": true,
+      "suggested_replacement": "gemini-3.8-flash",
+      "description": "Legacy model code (Deprecated - Please upgrade to Gemini 3.8 Flash)."
+    },
+    "gemini-1.0-pro": {
+      "name": "gemini-1.0-pro",
+      "display_name": "Gemini 1.0 Pro",
+      "status": "DEPRECATED",
+      "multimodal": false,
+      "deprecated": true,
+      "supports_thinking": false,
+      "suggested_replacement": "gemini-3.5-flash-lite",
+      "description": "Legacy text-only model."
+    }
+  }
+}
