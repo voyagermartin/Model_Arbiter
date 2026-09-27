@@ -18,11 +18,20 @@ try:
 except ImportError:
     HAS_TABULATE = False
 
+import importlib
+
 from core.pricer import calculate_cost_ntd, get_model_pricing
 from core.discovery import list_candidate_models
-from suites.pp_auto.harness import load_test_cases, execute_test_case
 
 logger = logging.getLogger("Model_Arbiter.evaluator")
+
+
+def load_suite_module(suite_name: str):
+    """Dynamically loads suite harness module for the given suite_name according to Suite Protocol v1.0."""
+    try:
+        return importlib.import_module(f"suites.{suite_name}.harness")
+    except ImportError as e:
+        raise ValueError(f"Unsupported or uninitialized benchmark suite '{suite_name}': {e}")
 
 
 def run_suite_evaluation(
@@ -33,12 +42,11 @@ def run_suite_evaluation(
     image_bytes: Optional[bytes] = None
 ) -> List[Dict[str, Any]]:
     """
-    Executes benchmark test suite across all active candidate models.
+    Executes benchmark test suite across all active candidate models dynamically.
     """
-    if suite_name != "pp_auto":
-        raise ValueError(f"Unsupported benchmark suite: {suite_name}")
+    suite_module = load_suite_module(suite_name)
+    test_cases = suite_module.load_test_cases()
 
-    test_cases = load_test_cases()
     if not candidate_models:
         discovered = list_candidate_models(api_key=api_key)
         candidate_models = [m["name"] for m in discovered if not m.get("deprecated")]
@@ -55,7 +63,7 @@ def run_suite_evaluation(
         case_details = []
 
         for case in test_cases:
-            res = execute_test_case(
+            res = suite_module.execute_test_case(
                 model_name=model_name,
                 test_case=case,
                 api_key=api_key,

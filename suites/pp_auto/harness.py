@@ -39,8 +39,20 @@ def compute_mrz_check_digit(data_str: str) -> int:
     return total % 10
 
 
+def normalize_mrz_line(line: str) -> str:
+    """Normalizes MRZ string by stripping whitespace and safely trimming length 45 ending with '<' to 44."""
+    if not line:
+        return ""
+    s = line.strip().replace("\r", "").replace("\n", "")
+    if len(s) == 45 and s.endswith('<'):
+        s = s[:44]
+    return s
+
+
 def verify_mrz_checksums(mrz_line1: str, mrz_line2: str) -> Tuple[bool, List[str]]:
     """Verifies 100% mathematical MRZ checksum compliance according to ICAO Doc 9303 TD3 format."""
+    mrz_line1 = normalize_mrz_line(mrz_line1)
+    mrz_line2 = normalize_mrz_line(mrz_line2)
     errors = []
     
     if len(mrz_line1) != 44:
@@ -88,6 +100,41 @@ def verify_mrz_checksums(mrz_line1: str, mrz_line2: str) -> Tuple[bool, List[str
 
     is_valid = len(errors) == 0
     return is_valid, errors
+
+
+def load_manifest() -> Dict[str, Any]:
+    """Loads suite manifest.json configuration according to Suite Protocol v1.0."""
+    current_dir = os.path.dirname(os.path.abspath(__file__))
+    manifest_file = os.path.join(current_dir, "manifest.json")
+    if os.path.exists(manifest_file):
+        try:
+            with open(manifest_file, "r", encoding="utf-8") as f:
+                return json.load(f)
+        except Exception as e:
+            logger.warning(f"Failed to load manifest.json: {e}")
+    return {}
+
+
+def load_prompt() -> str:
+    """Loads prompt text from specified prompt file in manifest.json or fallback."""
+    current_dir = os.path.dirname(os.path.abspath(__file__))
+    manifest = load_manifest()
+    prompt_filename = manifest.get("prompt_file", "prompt.txt")
+    prompt_file = os.path.join(current_dir, prompt_filename)
+    if os.path.exists(prompt_file):
+        try:
+            with open(prompt_file, "r", encoding="utf-8") as f:
+                content = f.read().strip()
+                if content:
+                    return content
+        except Exception as e:
+            logger.warning(f"Failed to load {prompt_filename}: {e}")
+
+    return (
+        "You are a professional Passport OCR engine. Analyze the provided passport image "
+        "and extract the exact JSON fields: full_name_en, passport_number, nationality, "
+        "mrz_line1, mrz_line2."
+    )
 
 
 def generate_synthetic_passport_image() -> bytes:
@@ -209,22 +256,54 @@ def execute_test_case(
 
         pil_img = Image.open(io.BytesIO(img_data))
 
-        prompt = (
-            "You are a professional Passport OCR engine. Analyze the provided passport image "
-            "and extract the exact JSON fields: full_name_en, passport_number, nationality, "
-            "mrz_line1, mrz_line2."
-        )
+        prompt = load_prompt()
+        manifest = load_manifest()
+        inf_config = manifest.get("inference_config", {})
+
+        temp = inf_config.get("temperature", 0.1)
+        top_p = inf_config.get("top_p")
+        mime_type = inf_config.get("response_mime_type", "application/json")
+        thinking_cfg_dict = inf_config.get("thinking_config")
+
+        config_kwargs = {
+            "response_mime_type": mime_type,
+            "response_schema": PassportResultSchema,
+            "temperature": temp
+        }
+        if top_p is not None:
+            config_kwargs["top_p"] = top_p
+
+        thinking_obj = None
+        if thinking_cfg_dict and hasattr(types, "ThinkingConfig"):
+            try:
+                thinking_obj = types.ThinkingConfig(**thinking_cfg_dict)
+            except Exception as exc:
+                logger.warning(f"Could not construct ThinkingConfig: {exc}")
+
+        if thinking_obj:
+            config_kwargs["thinking_config"] = thinking_obj
 
         start_time = time.time()
-        response = client.models.generate_content(
-            model=model_name,
-            contents=[pil_img, prompt],
-            config=types.GenerateContentConfig(
-                response_mime_type="application/json",
-                response_schema=PassportResultSchema,
-                temperature=0.0
+
+        try:
+            config = types.GenerateContentConfig(**config_kwargs)
+            response = client.models.generate_content(
+                model=model_name,
+                contents=[pil_img, prompt],
+                config=config
             )
-        )
+        except Exception as api_exc:
+            if "thinking_config" in config_kwargs:
+                logger.info(f"Model '{model_name}' rejected thinking_config parameter ({api_exc}). Retrying without thinking_config...")
+                config_kwargs.pop("thinking_config", None)
+                config = types.GenerateContentConfig(**config_kwargs)
+                response = client.models.generate_content(
+                    model=model_name,
+                    contents=[pil_img, prompt],
+                    config=config
+                )
+            else:
+                raise api_exc
         latency = round(time.time() - start_time, 3)
 
         usage = getattr(response, "usage_metadata", None)

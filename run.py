@@ -78,8 +78,7 @@ def main():
     parser.add_argument(
         "--suite",
         type=str,
-        choices=["pp_auto"],
-        help="Execute a benchmark suite (e.g., 'pp_auto' for Passport OCR verification)."
+        help="Execute a benchmark suite (e.g., 'pp_auto' for Passport OCR verification, or any custom suite under suites/)."
     )
 
     parser.add_argument(
