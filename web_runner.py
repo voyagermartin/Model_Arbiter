@@ -139,20 +139,11 @@ def main():
     api_key = api_key_input.strip() if api_key_input else None
     discovered_models = list_candidate_models(api_key=api_key, probe=False)
     active_radar_models = [m for m in discovered_models if not m.get("deprecated") and m.get("status") != "DEPRECATED"]
-    deprecated_radar_models = [m for m in discovered_models if m.get("deprecated") or m.get("status") == "DEPRECATED"]
 
-    with st.sidebar.expander(f"📡 市場模型雷達 ({len(active_radar_models)} 個現役可跑分模型)", expanded=False):
-        st.markdown("**🟢 現役與新登場模型 (Active Candidate Models)**")
+    with st.sidebar.expander(f"📡 市場模型雷達 ({len(active_radar_models)} 個現役模型)", expanded=False):
         for m in active_radar_models:
             badge = get_model_status_badge(m)
             st.markdown(f"- {badge}")
-
-        if deprecated_radar_models:
-            st.markdown("---")
-            st.caption("🔴 已淘汰/除役模型 (Deprecated - 測試自動過濾排除):")
-            for m in deprecated_radar_models:
-                rep = m.get("suggested_replacement") or "gemini-3.8-flash"
-                st.caption(f"• ~{m['name']}~ (已除役 - 建議改用 {rep})")
 
         st.markdown("---")
         refresh_radar = st.button("🔄 重新整理市場模型雷達", use_container_width=True)
