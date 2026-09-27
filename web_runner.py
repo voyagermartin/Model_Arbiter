@@ -7,6 +7,7 @@ import sys
 import json
 import time
 from datetime import datetime
+from typing import Dict, Any
 import streamlit as st
 
 # Ensure UTF-8 output encoding on Windows
@@ -41,16 +42,45 @@ st.markdown("""
         font-size: 1.05rem;
         margin-bottom: 1.5rem;
     }
-    .path-hint-box {
-        background-color: rgba(59, 130, 246, 0.1);
-        border-left: 4px solid #3B82F6;
-        padding: 0.85rem;
-        border-radius: 6px;
-        margin-bottom: 1rem;
-        font-size: 0.9rem;
-    }
 </style>
 """, unsafe_allow_html=True)
+
+
+def get_suite_status(suite_name: str) -> Dict[str, Any]:
+    """Dynamically retrieves manifest configuration and dataset sample count for the given suite."""
+    current_dir = os.path.dirname(os.path.abspath(__file__))
+    suite_dir = os.path.join(current_dir, "suites", suite_name)
+    
+    manifest_path = os.path.join(suite_dir, "manifest.json")
+    manifest = {}
+    if os.path.exists(manifest_path):
+        try:
+            with open(manifest_path, "r", encoding="utf-8") as f:
+                manifest = json.load(f)
+        except Exception:
+            manifest = {}
+
+    inf_cfg = manifest.get("inference_config", {})
+    temp = inf_cfg.get("temperature", 0.1)
+    thinking_cfg = inf_cfg.get("thinking_config", {})
+    thinking_budget = thinking_cfg.get("thinking_budget", 1024)
+
+    test_cases_path = os.path.join(suite_dir, "test_cases.json")
+    test_cases = []
+    if os.path.exists(test_cases_path):
+        try:
+            with open(test_cases_path, "r", encoding="utf-8") as f:
+                test_cases = json.load(f)
+        except Exception:
+            test_cases = []
+
+    return {
+        "suite_name": suite_name,
+        "temperature": temp,
+        "thinking_budget": thinking_budget,
+        "sample_count": len(test_cases),
+        "test_cases": test_cases
+    }
 
 
 def main():
@@ -84,24 +114,50 @@ def main():
         format_func=lambda x: "護照/證件辨識套件 (pp_auto)" if x == "pp_auto" else x
     )
 
+    # ---------------------------------------------------------
+    # 題庫狀態與同步控制卡片 (Benchmark Suite Status & Sync Control)
+    # ---------------------------------------------------------
     st.sidebar.markdown("---")
-    
-    # Image Upload & Physical Path Hint
-    st.sidebar.subheader("📂 測試圖檔設定")
-    uploaded_file = st.sidebar.file_uploader(
-        "上傳護照測試圖片 (支援 JPG/PNG)",
-        type=["jpg", "jpeg", "png"],
-        help="選擇真實護照圖片檔進行 VLM Multimodal 跑分"
+    st.sidebar.subheader("📁 基準題庫與環境規格")
+
+    status_info = get_suite_status(suite_option)
+    tb_val = status_info["thinking_budget"]
+    if tb_val == -1:
+        tb_str = "Dynamic (-1)"
+    elif tb_val > 0:
+        tb_str = f"{tb_val} Tokens"
+    else:
+        tb_str = "Disabled (0)"
+
+    temp_str = str(status_info["temperature"])
+    sample_count = status_info["sample_count"]
+
+    with st.sidebar.container(border=True):
+        st.markdown(f"**🎯 目標套件 (Suite)**：`{suite_option}`")
+        st.markdown(f"**🧠 Thinking Budget**：`{tb_str}`")
+        st.markdown(f"**🌡️ Temperature**：`{temp_str}`")
+        
+        if sample_count > 0:
+            st.success(f"📦 已載入 **{sample_count}** 筆黃金驗收樣本")
+        else:
+            st.warning("⚠️ 尚無本地驗收樣本，請點擊下方同步")
+
+    sync_clicked = st.sidebar.button(
+        "🔄 自 Registry 同步最新考卷",
+        use_container_width=True,
+        help="自中央 Google Sheet Web App 拉取最新 Prompt、推論參數與真實題庫"
     )
 
-    st.sidebar.markdown("""
-    <div class="path-hint-box">
-        💡 <b>實體圖片目錄提示：</b><br/>
-        可將測試圖片放置於目錄：<br/>
-        <code>suites/pp_auto/images/</code><br/>
-        <i>若未上傳且目錄為空，系統自動啟用內建備援 Mock 合成圖片。</i>
-    </div>
-    """, unsafe_allow_html=True)
+    if sync_clicked:
+        try:
+            with st.spinner("☁️ 正在連線至中央 Registry (GAS Web App) 拉取最新環境指紋與真實題庫..."):
+                from suites.pp_auto.sync_specs import sync_registry_specs
+                res_summary = sync_registry_specs()
+            st.toast(f"🎉 考卷與題庫同步完成 (載入 {res_summary.get('synced_cases', 0)} 筆樣本)", icon="☁️")
+            time.sleep(0.5)
+            st.rerun()
+        except Exception as e:
+            st.sidebar.error(f"❌ 同步中央 Registry 失敗: {e}")
 
     st.sidebar.info("💡 **自動化套利機制**：\n當候選模型達成 100% 通過率時，系統自動推薦單本 TWD 成本最低者。")
 
@@ -111,34 +167,8 @@ def main():
     st.markdown('<div class="main-title">Model_Arbiter 模型自動跑分與成本精算面板</div>', unsafe_allow_html=True)
     st.markdown('<div class="subtitle">Google Gemini 多模態模型自動化跑分、思考 Token 精算與最適模型推薦引擎</div>', unsafe_allow_html=True)
 
-    # Read uploaded image bytes if present
-    custom_image_bytes = uploaded_file.getvalue() if uploaded_file else None
-
-    if uploaded_file:
-        st.info(f"📸 已載入自訂上傳圖片: `{uploaded_file.name}` ({len(custom_image_bytes)} bytes)")
-
-    # Action Buttons (Sync & Start Benchmark)
-    col_btn1, col_btn2 = st.columns([1, 2])
-
-    with col_btn1:
-        sync_benchmark = st.button("🔄 自 Registry 同步考卷", use_container_width=True, help="自中央 Google Sheet Web App 拉取最新 Prompt、推論參數與真實題庫")
-
-    with col_btn2:
-        start_benchmark = st.button("🚀 開始全自動跑分與成本仲裁", type="primary", use_container_width=True)
-
-    if sync_benchmark:
-        try:
-            with st.spinner("☁️ 正在連線至中央 Registry (GAS Web App) 拉取最新環境指紋與真實題庫..."):
-                from suites.pp_auto.sync_specs import sync_registry_specs
-                res_summary = sync_registry_specs()
-            st.success(
-                f"✅ 成功自 Central Registry 同步考卷！"
-                f"已還原樣張 `{' ,'.join(res_summary.get('synced_images', []))}`，"
-                f"Thinking Budget 已更新為 `{res_summary.get('thinking_budget')}` tokens。"
-            )
-            st.toast(f"🎉 考卷與題庫同步完成 (樣張 ID: {', '.join(res_summary.get('case_ids', []))})", icon="☁️")
-        except Exception as e:
-            st.error(f"❌ 同步中央 Registry 失敗: {e}")
+    # Action Button
+    start_benchmark = st.button("🚀 開始全自動跑分與成本仲裁", type="primary", use_container_width=True)
 
     # ---------------------------------------------------------
     # 3. 跑分邏輯執行 (Benchmark Execution)
@@ -169,8 +199,7 @@ def main():
                 suite_name=suite_option,
                 api_key=api_key,
                 candidate_models=[model_name],
-                mock=is_mock,
-                image_bytes=custom_image_bytes
+                mock=is_mock
             )
             if res_list:
                 suite_results.append(res_list[0])

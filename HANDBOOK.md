@@ -162,6 +162,6 @@ python -m py_compile run.py web_runner.py core/*.py suites/pp_auto/*.py
 ### 🗓️ 2026-09-27 — v1.3.0 開發日誌與中央 Registry 動態考卷拉取里程碑
 - **[Registry Sync Engine]**：實裝 `suites/pp_auto/sync_specs.py` 遠端同步模組，支援自 Central Registry (GAS Web App) `doGet` 端點拉取最新 `system_prompt`（自動寫入 `suites/pp_auto/prompt.txt`）、推論配置 `temperature`, `top_p`, `thinking_budget`（自動寫入 `suites/pp_auto/manifest.json`），並將 Base64 圖檔與 Ground Truth 動態還原至 `suites/pp_auto/images/` 與 `test_cases.json`。
 - **[Harness & Multi-Sample Pipeline]**：升級 `suites/pp_auto/harness.py` 支援多樣本遍歷驗收、`normalize_mrz_line` 無縫補齊與截斷容錯、 order-independent 英文姓名 set matching 演算法與 None-Safe 思考 Token 精確解析。
-- **[Streamlit UI & CLI Upgrade]**：在 `web_runner.py` 畫面頂部新增「`🔄 自 Registry 同步考卷`」按鈕，並於 `run.py` CLI 新增 `--sync` 選項，實現無死角遠端同步。
+- **[Streamlit UI & UI Refactoring]**：重構 `web_runner.py` 面板，完全移除舊有 `st.file_uploader` 手動上傳與硬編碼目錄提示，升級為「`📁 基準題庫與環境規格 (Benchmark Suite Status)`」動態狀態卡片，即時展示當前套件之 Thinking Budget、Temperature 與已載入黃金樣本數，並整合「`🔄 自 Registry 同步最新考卷`」與 `st.rerun()` 即時刷新機制。
 - **[Arbitrage Recommendation Benchmark Verification]**：成功同步 PP_AUTO 上報之 `ddd93a4b` 真實題庫與 Prompt，啟動跑分 `gemini-3.5-flash-lite` 完整展現 Thinking Tokens（~900 tokens 水準），通過率達成 100%，並自動匯出最適推薦 active config `active_configs/pp_auto_model.json`。
 - **[Version Control]**：通過全模組 `py_compile` 零語法錯誤驗證。
