@@ -1,22 +1,22 @@
 [
   {
-    "id": "ddd93a4b",
-    "description": "中央 Registry 真實驗收樣張 (ddd93a4b)",
-    "image_filename": "ddd93a4b.jpg",
+    "id": "synthetic_sample",
+    "description": "中央 Registry 真實驗收樣張 (synthetic_sample)",
+    "image_filename": "synthetic_sample.jpg",
     "image_mock_data": {
-      "case_id": "ddd93a4b",
-      "full_name_en": "WU CHEN-HSING",
-      "passport_number": "360646299",
+      "case_id": "synthetic_sample",
+      "full_name_en": "WANG HSIAO-MING",
+      "passport_number": "350123456",
       "nationality": "TWN",
-      "mrz_line1": "P<TWNWU<<CHEN<HSING<<<<<<<<<<<<<<<<<<<<<<<<<",
-      "mrz_line2": "3606462999TWN7805123M3001019A123456789<<<<70"
+      "mrz_line1": "P<TWNWANG<<HSIAO<MING<<<<<<<<<<<<<<<<<<<<<<<",
+      "mrz_line2": "3501234561TWN9001011M3001019<<<<<<<<<<<<<<<4"
     },
     "expected_ground_truth": {
-      "full_name_en": "WU CHEN-HSING",
-      "passport_number": "360646299",
+      "full_name_en": "WANG HSIAO-MING",
+      "passport_number": "350123456",
       "nationality": "TWN",
-      "mrz_line1": "P<TWNWU<<CHEN<HSING<<<<<<<<<<<<<<<<<<<<<<<<<",
-      "mrz_line2": "3606462999TWN7805123M3001019A123456789<<<<70"
+      "mrz_line1": "P<TWNWANG<<HSIAO<MING<<<<<<<<<<<<<<<<<<<<<<<",
+      "mrz_line2": "3501234561TWN9001011M3001019<<<<<<<<<<<<<<<4"
     }
   }
 ]
