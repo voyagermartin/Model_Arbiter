@@ -41,18 +41,23 @@ def compute_mrz_check_digit(data_str: str) -> int:
 
 import re
 
-def normalize_mrz_line(line: str) -> str:
-    """Normalizes MRZ string by stripping whitespace and ensuring exact 44 length for P</V</I< MRZ lines."""
+def normalize_mrz_line(line: str, expected_length: int = 44) -> str:
+    """
+    對齊 PP_AUTO 線上生產環境標準：
+    去除換行與空白，若字尾角括號遺失或溢出，自動對齊至標準長度 (44 碼)。
+    針對 Line 2 末位包含 Check Digit 數字且中間填空 < 殘缺時，自動於末位前補齊 < 至標準 44 碼。
+    """
     if not line:
         return ""
-    s = line.strip().replace("\r", "").replace("\n", "")
-    if len(s) > 44 and s.startswith(('P<', 'V<', 'I<')):
-        s = s[:44]
-    elif len(s) < 44 and s.startswith(('P<', 'V<', 'I<')):
-        s = s.ljust(44, '<')
-    elif len(s) == 45 and s.endswith('<'):
-        s = s[:44]
-    return s
+    clean = line.strip().replace("\r", "").replace("\n", "").replace(" ", "")
+    if 40 <= len(clean) < expected_length:
+        if clean[-1].isdigit():
+            clean = clean[:-1].ljust(expected_length - 1, "<") + clean[-1]
+        else:
+            clean = clean.ljust(expected_length, "<")
+    elif len(clean) > expected_length:
+        clean = clean[:expected_length]
+    return clean
 
 
 def verify_mrz_checksums(mrz_line1: str, mrz_line2: str) -> Tuple[bool, List[str]]:
@@ -363,7 +368,8 @@ def execute_test_case(
                 config=config
             )
         except Exception as api_exc:
-            if "thinking_config" in config_kwargs:
+            err_str = str(api_exc).lower()
+            if "thinking" in err_str or "thought" in err_str or "unsupported" in err_str or "invalid_argument" in err_str or "thinking_config" in config_kwargs:
                 logger.info(f"Model '{model_name}' rejected thinking_config parameter ({api_exc}). Retrying without thinking_config...")
                 config_kwargs.pop("thinking_config", None)
                 config = types.GenerateContentConfig(**config_kwargs)
