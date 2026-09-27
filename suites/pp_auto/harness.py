@@ -228,10 +228,26 @@ def execute_test_case(
         latency = round(time.time() - start_time, 3)
 
         usage = getattr(response, "usage_metadata", None)
-        prompt_tokens = getattr(usage, "prompt_token_count", 0) if usage else 0
-        candidate_tokens = getattr(usage, "candidates_token_count", 0) if usage else 0
-        thought_tokens = getattr(usage, "thoughts_token_count", 0) if usage else 0
-        total_tokens = getattr(usage, "total_token_count", prompt_tokens + candidate_tokens + thought_tokens) if usage else 0
+        prompt_tokens = (getattr(usage, "prompt_token_count", 0) if usage else 0) or 0
+        candidate_tokens = (getattr(usage, "candidates_token_count", 0) if usage else 0) or 0
+
+        # 安全解析思考 Token（相容新舊 SDK 與無思考模式結構）
+        thought_tokens = 0
+        if usage:
+            # 支援 candidates_token_details 結構
+            details = getattr(usage, "candidates_token_details", None)
+            if details and len(details) > 0:
+                thought_tokens = getattr(details[0], "thinking_token_count", 0) or 0
+            if not thought_tokens:
+                # 備用檢查直接屬性
+                thought_tokens = getattr(usage, "thoughts_token_count", 0) or 0
+
+        # 安全計算 total_tokens，先確認屬性值，若無效則回退到三者相加
+        if usage:
+            reported_total = getattr(usage, "total_token_count", None)
+            total_tokens = reported_total if reported_total is not None else (prompt_tokens + candidate_tokens + thought_tokens)
+        else:
+            total_tokens = 0
 
         # Check response text
         if not response.text:
