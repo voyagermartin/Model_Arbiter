@@ -227,11 +227,15 @@ def list_candidate_models(api_key: Optional[str] = None, force_refresh: bool = F
     # Return cached registry if fresh (<24 hours) and force_refresh is False
     if not force_refresh and (now_ts - last_probed_at < CACHE_TTL_SECONDS) and cached_models:
         logger.info("[Model Radar] Returning cached model registry (<24h TTL).")
-        return list(cached_models.values())
+        res = list(cached_models.values())
+        res.sort(key=lambda m: (1 if (m.get("deprecated") or m.get("status") == "DEPRECATED") else 0, m.get("name")))
+        return res
 
     if not key:
         logger.info("GEMINI_API_KEY not present. Returning default model catalog.")
-        return DEFAULT_MODELS
+        res = list(DEFAULT_MODELS)
+        res.sort(key=lambda m: (1 if (m.get("deprecated") or m.get("status") == "DEPRECATED") else 0, m.get("name")))
+        return res
 
     try:
         from google import genai
@@ -297,6 +301,7 @@ def list_candidate_models(api_key: Optional[str] = None, force_refresh: bool = F
                 discovered_dict[d["name"]] = d
 
         final_candidates = list(discovered_dict.values())
+        final_candidates.sort(key=lambda m: (1 if (m.get("deprecated") or m.get("status") == "DEPRECATED") else 0, m.get("name")))
 
         # Update cache
         registry["last_probed_at"] = now_ts
@@ -308,7 +313,9 @@ def list_candidate_models(api_key: Optional[str] = None, force_refresh: bool = F
 
     except Exception as e:
         logger.warning(f"Failed to fetch remote models via google-genai SDK ({e}). Returning default catalog.")
-        return DEFAULT_MODELS
+        res = list(DEFAULT_MODELS)
+        res.sort(key=lambda m: (1 if (m.get("deprecated") or m.get("status") == "DEPRECATED") else 0, m.get("name")))
+        return res
 
 
 def get_model_status_badge(model: Dict[str, Any]) -> str:
