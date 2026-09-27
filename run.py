@@ -123,11 +123,17 @@ def main():
         handle_list_models(api_key=args.api_key)
 
     if args.suite:
+        models_input = None
+        if args.models:
+            models_input = []
+            for item in args.models:
+                models_input.extend([m.strip() for m in item.split(",") if m.strip()])
+
         print(f"\n[+] Launching Model Arbiter Benchmark Suite: [{args.suite.upper()}]...")
         results = run_suite_evaluation(
             suite_name=args.suite,
             api_key=args.api_key,
-            candidate_models=args.models,
+            candidate_models=models_input,
             mock=args.mock
         )
 

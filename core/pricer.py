@@ -4,10 +4,20 @@ from typing import Dict, Any
 
 # Official USD rates per 1,000,000 tokens
 PRICING_CATALOG_USD: Dict[str, Dict[str, float]] = {
+    "gemini-3.8-flash": {
+        "input_per_1m": 0.10,
+        "output_per_1m": 0.40,
+        "thought_per_1m": 0.40,
+    },
     "gemini-3.5-flash-lite": {
         "input_per_1m": 0.075,
         "output_per_1m": 0.30,
         "thought_per_1m": 0.30,
+    },
+    "gemini-3.5-flash": {
+        "input_per_1m": 0.10,
+        "output_per_1m": 0.40,
+        "thought_per_1m": 0.40,
     },
     "gemini-2.5-flash": {
         "input_per_1m": 0.10,

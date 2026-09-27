@@ -8,22 +8,31 @@ logger = logging.getLogger("Model_Arbiter.discovery")
 # Default offline fallback model catalog in case API key is not present or offline execution is requested
 DEFAULT_MODELS = [
     {
+        "name": "gemini-3.8-flash",
+        "display_name": "Gemini 3.8 Flash",
+        "status": "ACTIVE",
+        "multimodal": True,
+        "deprecated": False,
+        "supports_thinking": True,
+        "description": "Official flagship fast multimodal reasoning model with extended thinking."
+    },
+    {
         "name": "gemini-3.5-flash-lite",
         "display_name": "Gemini 3.5 Flash Lite",
         "status": "ACTIVE",
         "multimodal": True,
         "deprecated": False,
-        "supports_thinking": False,
-        "description": "Next-gen ultra lightweight baseline multimodal model."
+        "supports_thinking": True,
+        "description": "Next-gen ultra lightweight baseline multimodal reasoning model."
     },
     {
-        "name": "gemini-2.5-flash",
-        "display_name": "Gemini 2.5 Flash",
+        "name": "gemini-1.5-flash",
+        "display_name": "Gemini 1.5 Flash",
         "status": "ACTIVE",
         "multimodal": True,
         "deprecated": False,
-        "supports_thinking": True,
-        "description": "Next-gen hybrid reasoning model offering ultra-fast speed and low cost."
+        "supports_thinking": False,
+        "description": "Lightweight multimodal model optimized for speed."
     },
     {
         "name": "gemini-2.0-flash",
@@ -44,15 +53,6 @@ DEFAULT_MODELS = [
         "description": "Ultra lightweight cost-optimized multimodal model."
     },
     {
-        "name": "gemini-1.5-flash",
-        "display_name": "Gemini 1.5 Flash",
-        "status": "ACTIVE",
-        "multimodal": True,
-        "deprecated": False,
-        "supports_thinking": False,
-        "description": "Lightweight multimodal model optimized for speed."
-    },
-    {
         "name": "gemini-1.5-pro",
         "display_name": "Gemini 1.5 Pro",
         "status": "ACTIVE",
@@ -60,6 +60,15 @@ DEFAULT_MODELS = [
         "deprecated": False,
         "supports_thinking": False,
         "description": "Complex reasoning multimodal model with large context window."
+    },
+    {
+        "name": "gemini-2.5-flash",
+        "display_name": "Gemini 2.5 Flash",
+        "status": "DEPRECATED",
+        "multimodal": True,
+        "deprecated": True,
+        "supports_thinking": True,
+        "description": "Legacy model code (Replaced by Gemini 3.8 Flash)."
     },
     {
         "name": "gemini-1.0-pro",
@@ -101,7 +110,7 @@ def list_candidate_models(api_key: str = None) -> list[dict]:
             description = getattr(m, "description", "")
             
             deprecated = False
-            if "deprecated" in name.lower() or "legacy" in name.lower() or "1.0" in name:
+            if any(term in name.lower() for term in ["deprecated", "legacy", "1.0", "2.5-flash", "2.5-pro"]):
                 deprecated = True
 
             multimodal = True
@@ -110,10 +119,10 @@ def list_candidate_models(api_key: str = None) -> list[dict]:
 
             status = "ACTIVE" if not deprecated else "DEPRECATED"
 
-            if any(term in name.lower() for term in ["embedding", "imagen", "aqa", "tts", "stt"]):
+            if any(term in name.lower() for term in ["embedding", "imagen", "aqa", "tts", "stt", "veo", "lyria", "robotics", "computer-use", "banana"]):
                 continue
 
-            supports_thinking = any(v in name for v in ["2.0", "2.5", "3.0", "3.5"]) or "thinking" in name.lower()
+            supports_thinking = any(v in name for v in ["2.0", "2.5", "3.0", "3.1", "3.5", "3.6", "3.7", "3.8"]) or "thinking" in name.lower()
 
             candidate_list.append({
                 "name": name,
