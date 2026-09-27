@@ -213,6 +213,23 @@ def probe_model_status(model_name: str, api_key: Optional[str] = None) -> Dict[s
             }
 
 
+def extract_model_version_key(model: Dict[str, Any]) -> Tuple[int, float, str]:
+    """
+    Key function for sorting candidate models from newest version to oldest.
+    1. Active/New Discovered first (0), Deprecated last (1).
+    2. Model version number descending (-version_num, e.g. 3.8 > 3.5 > 2.0 > 1.5).
+    3. Model name string.
+    """
+    name = model.get("name", "").lower()
+    is_deprecated = model.get("deprecated") or model.get("status") == "DEPRECATED"
+    dep_rank = 1 if is_deprecated else 0
+
+    m = re.search(r"(\d+(?:\.\d+)?)", name)
+    version_num = float(m.group(1)) if m else 0.0
+
+    return (dep_rank, -version_num, name)
+
+
 def list_candidate_models(api_key: Optional[str] = None, force_refresh: bool = False, probe: bool = True) -> List[Dict[str, Any]]:
     """
     Discovers Google Gemini models via API and returns candidate models with status badges & caching.
@@ -228,13 +245,13 @@ def list_candidate_models(api_key: Optional[str] = None, force_refresh: bool = F
     if not force_refresh and (now_ts - last_probed_at < CACHE_TTL_SECONDS) and cached_models:
         logger.info("[Model Radar] Returning cached model registry (<24h TTL).")
         res = list(cached_models.values())
-        res.sort(key=lambda m: (1 if (m.get("deprecated") or m.get("status") == "DEPRECATED") else 0, m.get("name")))
+        res.sort(key=extract_model_version_key)
         return res
 
     if not key:
         logger.info("GEMINI_API_KEY not present. Returning default model catalog.")
         res = list(DEFAULT_MODELS)
-        res.sort(key=lambda m: (1 if (m.get("deprecated") or m.get("status") == "DEPRECATED") else 0, m.get("name")))
+        res.sort(key=extract_model_version_key)
         return res
 
     try:
@@ -301,7 +318,7 @@ def list_candidate_models(api_key: Optional[str] = None, force_refresh: bool = F
                 discovered_dict[d["name"]] = d
 
         final_candidates = list(discovered_dict.values())
-        final_candidates.sort(key=lambda m: (1 if (m.get("deprecated") or m.get("status") == "DEPRECATED") else 0, m.get("name")))
+        final_candidates.sort(key=extract_model_version_key)
 
         # Update cache
         registry["last_probed_at"] = now_ts
@@ -314,7 +331,7 @@ def list_candidate_models(api_key: Optional[str] = None, force_refresh: bool = F
     except Exception as e:
         logger.warning(f"Failed to fetch remote models via google-genai SDK ({e}). Returning default catalog.")
         res = list(DEFAULT_MODELS)
-        res.sort(key=lambda m: (1 if (m.get("deprecated") or m.get("status") == "DEPRECATED") else 0, m.get("name")))
+        res.sort(key=extract_model_version_key)
         return res
 
 
