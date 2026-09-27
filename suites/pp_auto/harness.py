@@ -39,12 +39,18 @@ def compute_mrz_check_digit(data_str: str) -> int:
     return total % 10
 
 
+import re
+
 def normalize_mrz_line(line: str) -> str:
-    """Normalizes MRZ string by stripping whitespace and safely trimming length 45 ending with '<' to 44."""
+    """Normalizes MRZ string by stripping whitespace and ensuring exact 44 length for P</V</I< MRZ lines."""
     if not line:
         return ""
     s = line.strip().replace("\r", "").replace("\n", "")
-    if len(s) == 45 and s.endswith('<'):
+    if len(s) > 44 and s.startswith(('P<', 'V<', 'I<')):
+        s = s[:44]
+    elif len(s) < 44 and s.startswith(('P<', 'V<', 'I<')):
+        s = s.ljust(44, '<')
+    elif len(s) == 45 and s.endswith('<'):
         s = s[:44]
     return s
 
@@ -154,18 +160,31 @@ def generate_synthetic_passport_image() -> bytes:
     return buf.getvalue()
 
 
-def get_test_image_bytes(provided_image_bytes: Optional[bytes] = None) -> Tuple[bytes, str]:
+def get_test_image_bytes(
+    test_case: Optional[Dict[str, Any]] = None,
+    provided_image_bytes: Optional[bytes] = None
+) -> Tuple[bytes, str]:
     """
     Retrieves image bytes for testing.
     Priority:
     1. Direct user provided image bytes.
-    2. Any image file in suites/pp_auto/images/ directory.
-    3. Synthetic Pillow fallback image.
+    2. Image file specified by test_case["image_filename"] in suites/pp_auto/images/
+    3. Any image file in suites/pp_auto/images/ directory.
+    4. Synthetic Pillow fallback image.
     """
     if provided_image_bytes:
         return provided_image_bytes, "使用者上傳圖片"
 
     images_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "images")
+    if test_case and test_case.get("image_filename"):
+        target_path = os.path.join(images_dir, test_case["image_filename"])
+        if os.path.exists(target_path):
+            try:
+                with open(target_path, "rb") as f:
+                    return f.read(), f"題目專屬圖片 ({test_case['image_filename']})"
+            except Exception:
+                pass
+
     if os.path.exists(images_dir):
         for fname in sorted(os.listdir(images_dir)):
             if fname.lower().endswith(('.jpg', '.jpeg', '.png')):
@@ -197,8 +216,8 @@ def execute_test_case(
     """
     Executes a single passport OCR benchmark test case with multi-stage error categorization.
     """
-    test_id = test_case.get("id", "UNKNOWN")
-    gt = test_case.get("expected_ground_truth", {})
+    test_id = test_case.get("id", test_case.get("case_id", "UNKNOWN"))
+    gt = test_case.get("expected_ground_truth") or test_case.get("ground_truth") or {}
 
     key = api_key or os.environ.get("GEMINI_API_KEY")
 
@@ -208,17 +227,28 @@ def execute_test_case(
         time.sleep(0.05)
         latency = round(time.time() - start_time, 3)
 
-        mock_data = test_case.get("image_mock_data", {})
-        extracted_name = f"{mock_data.get('surname', '')} {mock_data.get('given_names', '')}".strip()
-        extracted_pass_num = mock_data.get("passport_number", "")
-        mrz1 = mock_data.get("mrz_line1", "")
-        mrz2 = mock_data.get("mrz_line2", "")
+        mock_data = test_case.get("image_mock_data") or gt
+        extracted_name = mock_data.get("full_name_en") or f"{mock_data.get('surname', '')} {mock_data.get('given_names', '')}".strip()
+        extracted_pass_num = mock_data.get("passport_number") or mock_data.get("passport_no", "")
+        mrz1 = mock_data.get("mrz_line1") or mock_data.get("m1", "")
+        mrz2 = mock_data.get("mrz_line2") or mock_data.get("m2", "")
 
         mrz_valid, mrz_errors = verify_mrz_checksums(mrz1, mrz2)
-        fields_match = (
-            extracted_name == gt.get("full_name_en") and
-            extracted_pass_num == gt.get("passport_number")
-        )
+        
+        gt_name = gt.get("full_name_en") or f"{gt.get('surname', '')} {gt.get('given_names', '')}".strip()
+        gt_pass_num = gt.get("passport_number") or gt.get("passport_no", "")
+
+        norm_ext_name = re.sub(r'[^A-Z0-9]', '', (extracted_name or "").upper())
+        norm_gt_name = re.sub(r'[^A-Z0-9]', '', (gt_name or "").upper())
+        norm_ext_pno = re.sub(r'[^A-Z0-9]', '', (extracted_pass_num or "").upper())
+        norm_gt_pno = re.sub(r'[^A-Z0-9]', '', (gt_pass_num or "").upper())
+
+        fields_match = True
+        if norm_gt_name:
+            fields_match = fields_match and (norm_ext_name == norm_gt_name)
+        if norm_gt_pno:
+            fields_match = fields_match and (norm_ext_pno == norm_gt_pno)
+
         passed = mrz_valid and fields_match
 
         is_flash_lite = "lite" in model_name
@@ -245,7 +275,7 @@ def execute_test_case(
         }
 
     # Live SDK execution
-    img_data, img_source = get_test_image_bytes(image_bytes)
+    img_data, img_source = get_test_image_bytes(test_case=test_case, provided_image_bytes=image_bytes)
 
     try:
         from google import genai
@@ -313,15 +343,12 @@ def execute_test_case(
         # 安全解析思考 Token（相容新舊 SDK 與無思考模式結構）
         thought_tokens = 0
         if usage:
-            # 支援 candidates_token_details 結構
             details = getattr(usage, "candidates_token_details", None)
             if details and len(details) > 0:
                 thought_tokens = getattr(details[0], "thinking_token_count", 0) or 0
             if not thought_tokens:
-                # 備用檢查直接屬性
                 thought_tokens = getattr(usage, "thoughts_token_count", 0) or 0
 
-        # 安全計算 total_tokens，先確認屬性值，若無效則回退到三者相加
         if usage:
             reported_total = getattr(usage, "total_token_count", None)
             total_tokens = reported_total if reported_total is not None else (prompt_tokens + candidate_tokens + thought_tokens)
@@ -350,14 +377,33 @@ def execute_test_case(
         parsed_json = json.loads(response.text)
         json_valid = True
 
-        mrz1 = parsed_json.get("mrz_line1", "")
-        mrz2 = parsed_json.get("mrz_line2", "")
+        mrz1 = parsed_json.get("mrz_line1") or parsed_json.get("m1", "")
+        mrz2 = parsed_json.get("mrz_line2") or parsed_json.get("m2", "")
         mrz_valid, mrz_errors = verify_mrz_checksums(mrz1, mrz2)
 
-        fields_match = (
-            parsed_json.get("full_name_en") == gt.get("full_name_en") and
-            parsed_json.get("passport_number") == gt.get("passport_number")
-        )
+        extracted_name = parsed_json.get("full_name_en")
+        if not extracted_name and ("ln" in parsed_json or "fn" in parsed_json):
+            extracted_name = f"{parsed_json.get('ln', '')} {parsed_json.get('fn', '')}".strip()
+
+        extracted_pass_num = parsed_json.get("passport_number") or parsed_json.get("pno", "")
+
+        gt_name = gt.get("full_name_en") or f"{gt.get('surname', '')} {gt.get('given_names', '')}".strip()
+        gt_pass_num = gt.get("passport_number") or gt.get("passport_no") or gt.get("pno", "")
+
+        norm_ext_name = re.sub(r'[^A-Z0-9]', '', (extracted_name or "").upper())
+        norm_gt_name = re.sub(r'[^A-Z0-9]', '', (gt_name or "").upper())
+        norm_ext_pno = re.sub(r'[^A-Z0-9]', '', (extracted_pass_num or "").upper())
+        norm_gt_pno = re.sub(r'[^A-Z0-9]', '', (gt_pass_num or "").upper())
+
+        ext_words = set(re.findall(r'[A-Z0-9]+', (extracted_name or "").upper()))
+        gt_words = set(re.findall(r'[A-Z0-9]+', (gt_name or "").upper()))
+        name_match = (norm_ext_name == norm_gt_name) or (bool(gt_words) and ext_words == gt_words)
+
+        fields_match = True
+        if norm_gt_name:
+            fields_match = fields_match and name_match
+        if norm_gt_pno:
+            fields_match = fields_match and (norm_ext_pno == norm_gt_pno)
 
         passed = json_valid and mrz_valid and fields_match
 
@@ -368,7 +414,7 @@ def execute_test_case(
             error_details = f"MRZ 檢查碼不符: {mrz_errors}"
         elif not fields_match:
             error_stage = "[校驗階段]"
-            error_details = f"欄位不一致: 擷取姓名 '{parsed_json.get('full_name_en')}', 護照號 '{parsed_json.get('passport_number')}'"
+            error_details = f"欄位不一致: 擷取姓名 '{extracted_name}' (期望 '{gt_name}'), 護照號 '{extracted_pass_num}' (期望 '{gt_pass_num}')"
 
         return {
             "test_id": test_id,

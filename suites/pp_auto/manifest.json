@@ -1,13 +1,13 @@
 {
   "suite_name": "pp_auto",
   "version": "1.0.0",
-  "description": "國際護照 TD3 格式辨識與 MRZ 思考校驗套件",
+  "description": "中央 Registry 同步之國際護照辨識與 MRZ 思考校驗套件",
   "inference_config": {
-    "temperature": 0.1,
+    "temperature": 0.0,
     "top_p": 0.95,
     "response_mime_type": "application/json",
     "thinking_config": {
-      "thinking_budget": -1
+      "thinking_budget": 1024
     }
   },
   "prompt_file": "prompt.txt"

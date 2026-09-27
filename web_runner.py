@@ -117,8 +117,28 @@ def main():
     if uploaded_file:
         st.info(f"📸 已載入自訂上傳圖片: `{uploaded_file.name}` ({len(custom_image_bytes)} bytes)")
 
-    # Action Button
-    start_benchmark = st.button("🚀 開始全自動跑分與成本仲裁", type="primary", use_container_width=True)
+    # Action Buttons (Sync & Start Benchmark)
+    col_btn1, col_btn2 = st.columns([1, 2])
+
+    with col_btn1:
+        sync_benchmark = st.button("🔄 自 Registry 同步考卷", use_container_width=True, help="自中央 Google Sheet Web App 拉取最新 Prompt、推論參數與真實題庫")
+
+    with col_btn2:
+        start_benchmark = st.button("🚀 開始全自動跑分與成本仲裁", type="primary", use_container_width=True)
+
+    if sync_benchmark:
+        try:
+            with st.spinner("☁️ 正在連線至中央 Registry (GAS Web App) 拉取最新環境指紋與真實題庫..."):
+                from suites.pp_auto.sync_specs import sync_registry_specs
+                res_summary = sync_registry_specs()
+            st.success(
+                f"✅ 成功自 Central Registry 同步考卷！"
+                f"已還原樣張 `{' ,'.join(res_summary.get('synced_images', []))}`，"
+                f"Thinking Budget 已更新為 `{res_summary.get('thinking_budget')}` tokens。"
+            )
+            st.toast(f"🎉 考卷與題庫同步完成 (樣張 ID: {', '.join(res_summary.get('case_ids', []))})", icon="☁️")
+        except Exception as e:
+            st.error(f"❌ 同步中央 Registry 失敗: {e}")
 
     # ---------------------------------------------------------
     # 3. 跑分邏輯執行 (Benchmark Execution)

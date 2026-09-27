@@ -76,6 +76,12 @@ def main():
     )
 
     parser.add_argument(
+        "--sync",
+        action="store_true",
+        help="Sync latest environment fingerprints, prompt, generation configs, and test dataset from Central Registry (GAS Web App)."
+    )
+
+    parser.add_argument(
         "--suite",
         type=str,
         help="Execute a benchmark suite (e.g., 'pp_auto' for Passport OCR verification, or any custom suite under suites/)."
@@ -104,6 +110,14 @@ def main():
     if len(sys.argv) == 1:
         parser.print_help()
         sys.exit(0)
+
+    if args.sync:
+        print("\n[+] Synchronizing benchmark specs and test dataset from Central Registry...")
+        try:
+            from suites.pp_auto.sync_specs import sync_registry_specs
+            sync_registry_specs()
+        except Exception as e:
+            print(f"❌ Registry Sync failed: {e}")
 
     if args.list_models:
         handle_list_models(api_key=args.api_key)

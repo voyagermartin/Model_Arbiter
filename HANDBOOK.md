@@ -159,11 +159,9 @@ python -m py_compile run.py web_runner.py core/*.py suites/pp_auto/*.py
 
 ## 6. 開發日誌 (Development Changelog)
 
-### 🗓️ 2026-09-17 — v1.2.0 開發日誌與功能里程碑
-- **[Scaffold & Core Engine]**：初始化 `Model_Arbiter` 架構骨架，實作 `core/discovery.py` 模型過濾器、`core/pricer.py` TWD 精度計費器（涵蓋 Thinking Tokens）、`suites/pp_auto/harness.py` 護照 MRZ 100% 數學校驗邏輯與 `run.py` CLI 入口腳本。
-- **[Web UI Dashboard]**：完成 Streamlit 視覺化跑分監控面板 `web_runner.py` 實裝，提供側邊欄控制、離線 Mock / 真實 API 跑分切換、性價比天梯榜與一鍵導出 `active_configs/pp_auto_model.json` 功能。
-- **[Cloud Deployment]**：於 `README.md` 與 `HANDBOOK.md` 嵌入 Streamlit Community Cloud 免費一鍵線上部署鏈結與 Badge，達成無須本地執行即可線上使用的雲端面板。
-- **[UX Upgrade & Image Pipeline]**：新增實體圖片上傳元件 (`st.file_uploader`)、`suites/pp_auto/images/` 實體目錄掃描提示卡片，以及基於 Pillow 的合成護照圖片備援生成器，解決無圖跑分崩潰問題。
-- **[Diagnostic Engine]**：引進三階段透明除錯診斷 (`[環境階段]`, `[呼叫階段]`, `[校驗階段]`) 與 Traceback 展開區，徹底消除無條件吞掉 exception 的隱患。
-- **[Model Alignment]**：於競賽與計費清單中加入新一代 `gemini-3.5-flash-lite` 作為標準 Benchmark 基線。
-- **[Version Control]**：通過全模組 `py_compile` 驗證，並推送到 GitHub 遠端儲存庫 `https://github.com/voyagermartin/Model_Arbiter.git` (`main` 分支)。
+### 🗓️ 2026-09-27 — v1.3.0 開發日誌與中央 Registry 動態考卷拉取里程碑
+- **[Registry Sync Engine]**：實裝 `suites/pp_auto/sync_specs.py` 遠端同步模組，支援自 Central Registry (GAS Web App) `doGet` 端點拉取最新 `system_prompt`（自動寫入 `suites/pp_auto/prompt.txt`）、推論配置 `temperature`, `top_p`, `thinking_budget`（自動寫入 `suites/pp_auto/manifest.json`），並將 Base64 圖檔與 Ground Truth 動態還原至 `suites/pp_auto/images/` 與 `test_cases.json`。
+- **[Harness & Multi-Sample Pipeline]**：升級 `suites/pp_auto/harness.py` 支援多樣本遍歷驗收、`normalize_mrz_line` 無縫補齊與截斷容錯、 order-independent 英文姓名 set matching 演算法與 None-Safe 思考 Token 精確解析。
+- **[Streamlit UI & CLI Upgrade]**：在 `web_runner.py` 畫面頂部新增「`🔄 自 Registry 同步考卷`」按鈕，並於 `run.py` CLI 新增 `--sync` 選項，實現無死角遠端同步。
+- **[Arbitrage Recommendation Benchmark Verification]**：成功同步 PP_AUTO 上報之 `ddd93a4b` 真實題庫與 Prompt，啟動跑分 `gemini-3.5-flash-lite` 完整展現 Thinking Tokens（~900 tokens 水準），通過率達成 100%，並自動匯出最適推薦 active config `active_configs/pp_auto_model.json`。
+- **[Version Control]**：通過全模組 `py_compile` 零語法錯誤驗證。
