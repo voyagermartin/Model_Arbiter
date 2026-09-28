@@ -1,6 +1,6 @@
 # Model_Arbiter — 專案核心架構與開發者手冊 (HANDBOOK.md)
 
-> **Version**: v1.3.1-release  
+> **Version**: v1.4.0-release  
 > **Last Updated**: 2026-09-28  
 > **Target Engine**: Google Gemini API (Multimodal & Reasoning Models)  
 > **Repository**: [Model_Arbiter GitHub](https://github.com/voyagermartin/Model_Arbiter.git)
@@ -182,4 +182,9 @@ python -m py_compile run.py web_runner.py core/*.py suites/pp_auto/*.py
 
 ### 🗓️ 2026-09-28 — v1.3.1 兩大裁判偏差修復 (Thought Tokens 與舊模型 0s 假死退避)
 - **[Thought Tokens 防禦性讀取]**：修復 `gemini-3.8-flash` 等思考模型 Thought Tokens 顯示為 0 偏差。在 `suites/pp_auto/harness.py` 實裝多層防禦性欄位抽取，支援 `thoughts_token_count`, `thinking_token_count`, `thought_token_count` 及 `candidates_token_details` / `candidates_tokens_details` 結構，精準捕捉思考 Token 與精算計費。
-- **[舊模型退避與 API 別名映射]**：修復舊世代模型與非思考模型因傳入 `thinking_config` 拋出 `ClientError` (400 Bad Request / InvalidArgument) 時暴斃顯示 0.000s 的問題。精準隔離 429 Rate Limit，並於遭遇 `thinking_config` 不支援時徹底 pop 該參數，紀錄日誌 `[INFO] 模型 {model_name} 不支援 Thinking 模式，已自動退回標準直覺推論模式重試。` 並重試成功；對退役型號引進 `MODEL_ALIASES` 別名轉向機制（如 `gemini-2.0-flash` ➔ `gemini-3.5-flash`, `gemini-1.5-flash` ➔ `gemini-flash-lite-latest`），確保所有測試模型交出真實通過率、延遲與正確分數。
+- **[舊模型退避與 API 別名映射]**：修復舊世代模型與非思考模型因傳入 `thinking_config` 拋出 `ClientError` (400 Bad Request / InvalidArgument) 時暴斃顯示 0.000s 的問題。精準隔離 429 Rate Limit，並於遭遇 `thinking_config` 不支援時徹底 pop 該參數，紀錄日誌 `[INFO] 模型 {model_name} 不支援 Thinking 模式，已自動退回標準直覺推論模式重試。` 並重試成功。
+
+### 🗓️ 2026-09-28 — v1.4.0 徹底拔除 MODEL_ALIASES 別名代打與落實真實端點除役過濾
+- **[徹底刪除 MODEL_ALIASES (No Model Aliasing)]**：徹底移除 `suites/pp_auto/harness.py` 中所有 `MODEL_ALIASES` 轉向與代打邏輯。呼叫 API 時精準傳入 requested `model_name`，杜絕幽靈端點替代，落實客觀評測天職。
+- **[Pre-flight 除役過濾與真實現役模型池]**：於 `core/discovery.py` 與 `core/evaluator.py` 強化 Pre-flight Radar Filter，對於 API 探測回傳 `404 NOT_FOUND` 或標記為 `DEPRECATED` 之模型（如 `gemini-2.0-flash`, `gemini-1.5-flash`），一律於評測前自動過濾排除，絕不上榜或匯出至 `active_configs/pp_auto_model.json`，防止生產環境誤呼叫斷線；更新 `DEFAULT_MODELS` 為現役 Gemini 模型池 (`gemini-3.8-flash`, `gemini-3.5-flash`, `gemini-3.5-flash-lite`, `gemini-3.1-flash-lite`, `gemini-2.5-flash-lite`)。
+- **[Thinking Fallback 機制保留]**：保留當現役模型因不支援 `thinking_config` 拋出 ClientError/400 時，自動剝離思考參數退回直覺推論模式重試之穩健機制。

@@ -17,12 +17,11 @@ REGISTRY_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "model_
 CACHE_TTL_SECONDS = 86400  # 24 hour cache TTL
 
 KNOWN_BASELINE_MODELS = {
+    "gemini-3.8-flash",
+    "gemini-3.5-flash",
     "gemini-3.5-flash-lite",
-    "gemini-1.5-flash",
-    "gemini-2.0-flash",
-    "gemini-2.0-flash-lite",
-    "gemini-1.5-pro",
-    "gemini-1.0-pro"
+    "gemini-3.1-flash-lite",
+    "gemini-2.5-flash-lite"
 }
 
 # Static fallback candidate catalog
@@ -38,6 +37,16 @@ DEFAULT_MODELS = [
         "description": "Official flagship fast multimodal reasoning model with extended thinking."
     },
     {
+        "name": "gemini-3.5-flash",
+        "display_name": "Gemini 3.5 Flash",
+        "status": "ACTIVE",
+        "multimodal": True,
+        "deprecated": False,
+        "supports_thinking": True,
+        "suggested_replacement": None,
+        "description": "High performance multimodal reasoning model."
+    },
+    {
         "name": "gemini-3.5-flash-lite",
         "display_name": "Gemini 3.5 Flash Lite",
         "status": "ACTIVE",
@@ -48,28 +57,18 @@ DEFAULT_MODELS = [
         "description": "Next-gen ultra lightweight baseline multimodal reasoning model."
     },
     {
-        "name": "gemini-1.5-flash",
-        "display_name": "Gemini 1.5 Flash",
+        "name": "gemini-3.1-flash-lite",
+        "display_name": "Gemini 3.1 Flash Lite",
         "status": "ACTIVE",
         "multimodal": True,
         "deprecated": False,
         "supports_thinking": False,
         "suggested_replacement": None,
-        "description": "Lightweight multimodal model optimized for speed."
+        "description": "Speed optimized lightweight multimodal model."
     },
     {
-        "name": "gemini-2.0-flash",
-        "display_name": "Gemini 2.0 Flash",
-        "status": "ACTIVE",
-        "multimodal": True,
-        "deprecated": False,
-        "supports_thinking": True,
-        "suggested_replacement": None,
-        "description": "Fast multimodal workhorse model with thinking token capabilities."
-    },
-    {
-        "name": "gemini-2.0-flash-lite",
-        "display_name": "Gemini 2.0 Flash Lite",
+        "name": "gemini-2.5-flash-lite",
+        "display_name": "Gemini 2.5 Flash Lite",
         "status": "ACTIVE",
         "multimodal": True,
         "deprecated": False,
@@ -78,14 +77,24 @@ DEFAULT_MODELS = [
         "description": "Ultra lightweight cost-optimized multimodal model."
     },
     {
-        "name": "gemini-1.5-pro",
-        "display_name": "Gemini 1.5 Pro",
-        "status": "ACTIVE",
+        "name": "gemini-2.0-flash",
+        "display_name": "Gemini 2.0 Flash",
+        "status": "DEPRECATED",
         "multimodal": True,
-        "deprecated": False,
+        "deprecated": True,
+        "supports_thinking": True,
+        "suggested_replacement": "gemini-3.5-flash",
+        "description": "Retired legacy model code (404 NOT_FOUND by vendor)."
+    },
+    {
+        "name": "gemini-1.5-flash",
+        "display_name": "Gemini 1.5 Flash",
+        "status": "DEPRECATED",
+        "multimodal": True,
+        "deprecated": True,
         "supports_thinking": False,
-        "suggested_replacement": None,
-        "description": "Complex reasoning multimodal model with large context window."
+        "suggested_replacement": "gemini-3.5-flash-lite",
+        "description": "Retired legacy model code (404 NOT_FOUND by vendor)."
     },
     {
         "name": "gemini-2.5-flash",
@@ -138,8 +147,8 @@ def probe_model_status(model_name: str, api_key: Optional[str] = None) -> Dict[s
     norm_name = model_name.lower().replace("models/", "").strip()
     
     # Check known deprecated models
-    if any(k in norm_name for k in ["2.5-flash", "2.5-pro", "1.0-pro", "deprecated", "legacy"]):
-        replacement = "gemini-3.8-flash" if "3.8" in norm_name or "2.5" in norm_name else "gemini-3.5-flash-lite"
+    if any(k in norm_name for k in ["2.0-flash", "1.5-flash", "1.5-pro", "2.5-flash", "2.5-pro", "1.0-pro", "deprecated", "legacy"]):
+        replacement = "gemini-3.8-flash" if ("3.8" in norm_name or "2.5" in norm_name or "2.0" in norm_name) else "gemini-3.5-flash-lite"
         return {
             "name": norm_name,
             "status": "DEPRECATED",

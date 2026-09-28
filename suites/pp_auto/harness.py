@@ -361,53 +361,35 @@ def execute_test_case(
 
         has_thinking = "thinking_config" in config_kwargs
 
-        def _do_generate(target_model: str, kwargs: dict):
-            cfg = types.GenerateContentConfig(**kwargs)
-            return call_gemini_with_resilience(
-                client=client,
-                model_name=target_model,
-                contents=[pil_img, prompt],
-                config=cfg
-            )
-
-        MODEL_ALIASES = {
-            "gemini-2.0-flash": "gemini-3.5-flash",
-            "gemini-1.5-flash": "gemini-flash-lite-latest",
-            "gemini-2.0-flash-lite": "gemini-flash-lite-latest",
-            "gemini-1.5-pro": "gemini-3.5-flash",
-            "gemini-1.0-pro": "gemini-flash-lite-latest"
-        }
-
-        active_target_model = model_name
-
         try:
-            response = _do_generate(active_target_model, config_kwargs)
+            config = types.GenerateContentConfig(**config_kwargs)
+            response = call_gemini_with_resilience(
+                client=client,
+                model_name=model_name,
+                contents=[pil_img, prompt],
+                config=config
+            )
         except Exception as api_exc:
             err_str = str(api_exc).lower()
             err_name = api_exc.__class__.__name__
 
-            # Check if model returns 404 / NOT_FOUND / no longer available
-            if ("404" in err_str or "not_found" in err_str or "no longer available" in err_str) and active_target_model in MODEL_ALIASES:
-                fallback_model = MODEL_ALIASES[active_target_model]
-                logger.info(f"[INFO] 舊型號 '{active_target_model}' 已由 API 轉向，自動映射至相容型號 '{fallback_model}' 執行跑分。")
-                active_target_model = fallback_model
-                try:
-                    response = _do_generate(active_target_model, config_kwargs)
-                except Exception as inner_exc:
-                    api_exc = inner_exc
-                    err_str = str(api_exc).lower()
-                    err_name = api_exc.__class__.__name__
-
             is_rate_limit = "429" in err_str or "rate limit" in err_str or "resource_exhausted" in err_str
-            is_client_error = ("clienterror" in err_name.lower() or "clienterror" in err_str or (errors and isinstance(api_exc, errors.ClientError))) and not is_rate_limit
-            is_invalid_arg = ("invalid" in err_str or "400" in err_str or "bad request" in err_str or "invalidargument" in err_name.lower()) and not is_rate_limit
+            is_404 = "404" in err_str or "not_found" in err_str or "no longer available" in err_str
+            is_client_error = ("clienterror" in err_name.lower() or "clienterror" in err_str or (errors and isinstance(api_exc, errors.ClientError))) and not is_rate_limit and not is_404
+            is_invalid_arg = ("invalid" in err_str or "400" in err_str or "bad request" in err_str or "invalidargument" in err_name.lower()) and not is_rate_limit and not is_404
             is_thinking_rejected = "thinking" in err_str or "thought" in err_str or "unsupported" in err_str or "unknown field" in err_str
 
-            if has_thinking and not is_rate_limit and (is_client_error or is_invalid_arg or is_thinking_rejected):
+            if has_thinking and not is_rate_limit and not is_404 and (is_client_error or is_invalid_arg or is_thinking_rejected):
                 logger.info(f"[INFO] 模型 {model_name} 不支援 Thinking 模式，已自動退回標準直覺推論模式重試。")
                 config_kwargs.pop("thinking_config", None)
                 has_thinking = False
-                response = _do_generate(active_target_model, config_kwargs)
+                config = types.GenerateContentConfig(**config_kwargs)
+                response = call_gemini_with_resilience(
+                    client=client,
+                    model_name=model_name,
+                    contents=[pil_img, prompt],
+                    config=config
+                )
             else:
                 raise api_exc
 
