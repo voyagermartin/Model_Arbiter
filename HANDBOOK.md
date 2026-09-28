@@ -114,11 +114,13 @@ $$\text{Total Cost (TWD)} = \text{Total Cost (USD)} \times 32.0$$
 #### 主流模型基準費率表 (USD per 1M Tokens):
 | 模型代碼 (Model ID) | Input Rate / 1M | Output Rate / 1M | Thought Rate / 1M | 狀態 (Status) | 備註 |
 | :--- | :---: | :---: | :---: | :---: | :--- |
-| `gemini-3.8-flash` | $0.15 | $0.60 | $0.60 | 🚀 旗艦現役 | 🧠 最強多模態推理與長思考模型 |
+| `gemini-3.8-flash` | $0.10 | $0.40 | $0.40 | 🚀 旗艦現役 | 🧠 最強多模態推理與長思考模型 |
+| `gemini-3.5-flash` | $0.10 | $0.40 | $0.40 | 🟢 高效現役 | 🧠 高效多模態視覺與 reasoning 模型 |
 | `gemini-3.5-flash-lite` | $0.075 | $0.30 | $0.30 | 🟢 次世代現役 | ⚡ 極致降本與高速辨識模型 |
-| `gemini-2.0-flash` | $0.10 | $0.40 | $0.40 | 🟢 現役 | ⚡ 多模態主力模型 |
-| `gemini-2.0-flash-lite` | $0.075 | $0.30 | $0.30 | 🟢 現役 | ⚡ 輕量化費用優化模型 |
-| `gemini-1.5-flash` | $0.075 | $0.30 | $0.30 | 🟢 現役 | ⚡ 經典 Flash 模型 |
+| `gemini-3.1-flash-lite` | $0.075 | $0.30 | $0.30 | 🟢 高速現役 | ⚡ 極速輕量多模態辨識模型 |
+| `gemini-2.5-flash-lite` | $0.075 | $0.30 | - | 🔴 已除役 (404) | ⚠️ Pre-flight 預檢自動排除 |
+| `gemini-2.0-flash` | $0.10 | $0.40 | $0.40 | 🔴 已除役 (404) | ⚠️ Pre-flight 預檢自動排除 |
+| `gemini-1.5-flash` | $0.075 | $0.30 | - | 🔴 已除役 (404) | ⚠️ Pre-flight 預檢自動排除 |
 | `gemini-1.5-pro` | $1.25 | $5.00 | $5.00 | 🟢 現役 | 🏆 頂規大上下文模型 |
 | `gemini-2.5-flash` | $0.10 | $0.40 | $0.40 | 🔴 已除役 | ⚠️ Pre-flight 預檢自動排除 |
 | `gemini-1.0-pro` | $0.50 | $1.50 | - | 🔴 已除役 | ⚠️ Pre-flight 預檢自動排除 |
