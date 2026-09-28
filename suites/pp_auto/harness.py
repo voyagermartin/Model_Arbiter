@@ -203,7 +203,7 @@ def get_test_image_bytes(
     return generate_synthetic_passport_image(), "備援 Mock 合成圖片 (Synthetic Sample)"
 
 
-def call_gemini_with_resilience(client, model_name: str, contents: Any, config: Any, max_retries: int = 3) -> Tuple[Any, float]:
+def call_gemini_with_resilience(client, model_name: str, contents: Any, config: Any, max_retries: int = 5) -> Tuple[Any, float]:
     """
     具備指數退避 (Exponential Backoff) 的穩健呼叫器，專門抵禦 503 High Demand 與 429 Rate Limit。
     回傳 (response, call_latency_sec)，Latency 僅包含最終單次成功呼叫之純推論時間，排除重試睡眠。
@@ -231,14 +231,14 @@ def call_gemini_with_resilience(client, model_name: str, contents: Any, config: 
             err_code = getattr(e, "code", None)
 
             if is_server_error or "503" in err_str or err_code == 503 or "UNAVAILABLE" in err_str:
-                wait_time = (2 ** attempt) + 1  # 2s, 3s, 5s...
+                wait_time = (2 ** attempt) + 2  # 3s, 4s, 6s...
                 logging.warning(f"⚠️ [{model_name}] 遭遇 503 伺服器滿載，將於 {wait_time} 秒後重試 (第 {attempt+1}/{max_retries} 次)...")
                 time.sleep(wait_time)
                 if attempt == max_retries - 1:
                     raise e
             elif "429" in err_str or err_code == 429 or "RESOURCE_EXHAUSTED" in err_str or "rate limit" in err_str.lower():
-                wait_time = (2 ** attempt) + 2  # 3s, 4s, 6s...
-                logging.warning(f"⚠️ [{model_name}] 觸發 429 速率限制，退避等待 {wait_time} 秒...")
+                wait_time = (attempt * 10) + 12  # 12s, 22s, 32s, 42s...
+                logging.warning(f"⚠️ [{model_name}] 觸發 429 速率限制，退避等待 {wait_time} 秒 (第 {attempt+1}/{max_retries} 次)...")
                 time.sleep(wait_time)
                 if attempt == max_retries - 1:
                     raise e
@@ -352,13 +352,14 @@ def execute_test_case(
             config_kwargs["top_p"] = top_p
 
         thinking_obj = None
-        if thinking_cfg_dict and hasattr(types, "ThinkingConfig"):
+        if thinking_cfg_dict is not None and hasattr(types, "ThinkingConfig"):
             try:
-                thinking_obj = types.ThinkingConfig(**thinking_cfg_dict)
+                clean_dict = {k: v for k, v in thinking_cfg_dict.items() if v not in (-1, None)}
+                thinking_obj = types.ThinkingConfig(**clean_dict)
             except Exception as exc:
                 logger.warning(f"Could not construct ThinkingConfig: {exc}")
 
-        if thinking_obj:
+        if thinking_obj is not None:
             config_kwargs["thinking_config"] = thinking_obj
 
         has_thinking = "thinking_config" in config_kwargs
@@ -421,6 +422,8 @@ def execute_test_case(
                         or _get_val(first, "thinking_token_count")
                         or _get_val(first, "thought_token_count")
                     )
+
+        logger.info(f"[{model_name}] Tokens -> Prompt: {prompt_tokens}, Candidate: {candidate_tokens}, Thought: {thought_tokens}")
 
         if usage:
             reported_total = getattr(usage, "total_token_count", None)

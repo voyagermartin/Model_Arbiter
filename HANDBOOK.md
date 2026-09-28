@@ -1,6 +1,6 @@
 # Model_Arbiter — 專案核心架構與開發者手冊 (HANDBOOK.md)
 
-> **Version**: v1.4.1-release  
+> **Version**: v1.4.2-release  
 > **Last Updated**: 2026-09-28  
 > **Target Engine**: Google Gemini API (Multimodal & Reasoning Models)  
 > **Repository**: [Model_Arbiter GitHub](https://github.com/voyagermartin/Model_Arbiter.git)
@@ -193,3 +193,8 @@ python -m py_compile run.py web_runner.py core/*.py suites/pp_auto/*.py
 - **[3.5-Flash 思考漏洞排查與動態 Thinking Budget 優化]**：診斷出過往固定傳遞 `thinking_budget: 1024` 會導致 `gemini-3.5-flash` 於 Schema 結構輸出時抑制 Thinking (`thoughts_token_count=None`)。將 `suites/pp_auto/manifest.json` 之 `thinking_config` 更新為動態 `{}`，實測 `gemini-3.5-flash` 可產生 1295+ 思考 Tokens，成本精算回歸真實公平競賽。
 - **[徹底清除除役模型 gemini-2.5-flash-lite]**：將回傳 404 NOT_FOUND 之 `gemini-2.5-flash-lite` 徹底自 `KNOWN_BASELINE_MODELS` 移除並於 `core/discovery.py` 與 `core/model_registry.json` 標記為 `DEPRECATED`。現役測試佇列收斂為：`gemini-3.5-flash`, `gemini-3.1-flash-lite`, `gemini-3.5-flash-lite`, `gemini-3.8-flash`。
 - **[排他計時重構 (Pure Latency)]**：重構 `suites/pp_auto/harness.py` 內 `call_gemini_with_resilience` 延遲計數器，以 `time.perf_counter()` 僅封裝最後一次成功 API 發起至 response 取得之純推論時間，完全排除 429/503 退避重試睡眠時間，平均延遲回歸 1.8s ~ 3.5s 常態。
+
+### 🗓️ 2026-09-28 — v1.4.2 解放 Thinking Budget 與根治 3.5-flash 解析與真思考點算
+- **[解放 Thinking Budget 天花板]**：修正 `suites/pp_auto/harness.py` 中 `if thinking_cfg_dict:` 因 Python 空字典 `{}` 隱式轉為 False 導致未正確建立 `ThinkingConfig()` 的核心 bug。調整為 `if thinking_cfg_dict is not None:`，完全解放 `gemini-3.5-flash` 的思考預算限制，動態開啟全量 reasoning。
+- **[思考 Token 精度讀取與計費定價]**：實測 `gemini-3.5-flash` 在動態 Thinking 下成功產生 1,385 思考 Tokens（`thoughts_token_count`），精準納入 `pricer.py` 精算，單次呼叫成本回歸真實 NT$0.0241（徹底根治過去無思考的 NT$0.006678 虛假低價假象）。
+- **[429 Rate Limit 退避強化]**：擴充 `call_gemini_with_resilience` 重試上限至 5 次，並將 429 速率限制退避時間拉長至 12s~42s，保障 API 免費層與高併發測試穩定運作。
