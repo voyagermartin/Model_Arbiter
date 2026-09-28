@@ -57,9 +57,8 @@ def run_suite_evaluation(
             info = radar_models.get(norm_id) or probe_model_status(norm_id, api_key=api_key)
             if info.get("status") == "DEPRECATED" or info.get("deprecated"):
                 rep = info.get("suggested_replacement") or "gemini-3.8-flash"
-                logger.warning(f"⚠️ [Pre-flight Filter] 自動排除已除役模型 (DEPRECATED): {m_id} (請改用 {rep})")
-            else:
-                valid_models.append(m_id)
+                logger.info(f"ℹ️ [Pre-flight Filter] 使用者指定模型 '{m_id}' 已為舊版標記，將交由 Harness 彈性退避模式進行驗證。")
+            valid_models.append(m_id)
         candidate_models = valid_models
 
     if not candidate_models:

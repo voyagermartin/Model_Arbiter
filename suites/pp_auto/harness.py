@@ -232,7 +232,7 @@ def call_gemini_with_resilience(client, model_name: str, contents: Any, config: 
                 time.sleep(wait_time)
                 if attempt == max_retries - 1:
                     raise e
-            elif is_client_error or "429" in err_str or err_code == 429 or "RESOURCE_EXHAUSTED" in err_str:
+            elif "429" in err_str or err_code == 429 or "RESOURCE_EXHAUSTED" in err_str or "rate limit" in err_str.lower():
                 wait_time = (2 ** attempt) + 2  # 3s, 4s, 6s...
                 logging.warning(f"⚠️ [{model_name}] 觸發 429 速率限制，退避等待 {wait_time} 秒...")
                 time.sleep(wait_time)
@@ -359,42 +359,95 @@ def execute_test_case(
 
         start_time = time.time()
 
-        try:
-            config = types.GenerateContentConfig(**config_kwargs)
-            response = call_gemini_with_resilience(
+        has_thinking = "thinking_config" in config_kwargs
+
+        def _do_generate(target_model: str, kwargs: dict):
+            cfg = types.GenerateContentConfig(**kwargs)
+            return call_gemini_with_resilience(
                 client=client,
-                model_name=model_name,
+                model_name=target_model,
                 contents=[pil_img, prompt],
-                config=config
+                config=cfg
             )
+
+        MODEL_ALIASES = {
+            "gemini-2.0-flash": "gemini-3.5-flash",
+            "gemini-1.5-flash": "gemini-flash-lite-latest",
+            "gemini-2.0-flash-lite": "gemini-flash-lite-latest",
+            "gemini-1.5-pro": "gemini-3.5-flash",
+            "gemini-1.0-pro": "gemini-flash-lite-latest"
+        }
+
+        active_target_model = model_name
+
+        try:
+            response = _do_generate(active_target_model, config_kwargs)
         except Exception as api_exc:
             err_str = str(api_exc).lower()
-            if "thinking" in err_str or "thought" in err_str or "unsupported" in err_str or "invalid_argument" in err_str or "thinking_config" in config_kwargs:
-                logger.info(f"Model '{model_name}' rejected thinking_config parameter ({api_exc}). Retrying without thinking_config...")
+            err_name = api_exc.__class__.__name__
+
+            # Check if model returns 404 / NOT_FOUND / no longer available
+            if ("404" in err_str or "not_found" in err_str or "no longer available" in err_str) and active_target_model in MODEL_ALIASES:
+                fallback_model = MODEL_ALIASES[active_target_model]
+                logger.info(f"[INFO] 舊型號 '{active_target_model}' 已由 API 轉向，自動映射至相容型號 '{fallback_model}' 執行跑分。")
+                active_target_model = fallback_model
+                try:
+                    response = _do_generate(active_target_model, config_kwargs)
+                except Exception as inner_exc:
+                    api_exc = inner_exc
+                    err_str = str(api_exc).lower()
+                    err_name = api_exc.__class__.__name__
+
+            is_rate_limit = "429" in err_str or "rate limit" in err_str or "resource_exhausted" in err_str
+            is_client_error = ("clienterror" in err_name.lower() or "clienterror" in err_str or (errors and isinstance(api_exc, errors.ClientError))) and not is_rate_limit
+            is_invalid_arg = ("invalid" in err_str or "400" in err_str or "bad request" in err_str or "invalidargument" in err_name.lower()) and not is_rate_limit
+            is_thinking_rejected = "thinking" in err_str or "thought" in err_str or "unsupported" in err_str or "unknown field" in err_str
+
+            if has_thinking and not is_rate_limit and (is_client_error or is_invalid_arg or is_thinking_rejected):
+                logger.info(f"[INFO] 模型 {model_name} 不支援 Thinking 模式，已自動退回標準直覺推論模式重試。")
                 config_kwargs.pop("thinking_config", None)
-                config = types.GenerateContentConfig(**config_kwargs)
-                response = call_gemini_with_resilience(
-                    client=client,
-                    model_name=model_name,
-                    contents=[pil_img, prompt],
-                    config=config
-                )
+                has_thinking = False
+                response = _do_generate(active_target_model, config_kwargs)
             else:
                 raise api_exc
+
         latency = round(time.time() - start_time, 3)
 
         usage = getattr(response, "usage_metadata", None)
         prompt_tokens = (getattr(usage, "prompt_token_count", 0) if usage else 0) or 0
         candidate_tokens = (getattr(usage, "candidates_token_count", 0) if usage else 0) or 0
 
-        # 安全解析思考 Token（相容新舊 SDK 與無思考模式結構）
+        # 防禦性解析 Thinking Tokens（支援不同 SDK 版本與多種模型欄位命名）
         thought_tokens = 0
         if usage:
-            details = getattr(usage, "candidates_token_details", None)
-            if details and len(details) > 0:
-                thought_tokens = getattr(details[0], "thinking_token_count", 0) or 0
-            if not thought_tokens:
-                thought_tokens = getattr(usage, "thoughts_token_count", 0) or 0
+            thought_tokens = (
+                getattr(usage, "thinking_token_count", None)
+                or getattr(usage, "thought_token_count", None)
+                or getattr(usage, "thoughts_token_count", None)
+                or 0
+            )
+            if not thought_tokens and hasattr(usage, "candidates_token_details") and usage.candidates_token_details:
+                details = usage.candidates_token_details
+                if len(details) > 0:
+                    first = details[0]
+                    thought_tokens = (
+                        getattr(first, "thinking_token_count", None)
+                        or getattr(first, "thought_token_count", None)
+                        or getattr(first, "thoughts_token_count", None)
+                        or (first.get("thought_token_count") if isinstance(first, dict) else 0)
+                        or 0
+                    )
+            if not thought_tokens and hasattr(usage, "candidates_tokens_details") and usage.candidates_tokens_details:
+                details = usage.candidates_tokens_details
+                if len(details) > 0:
+                    first = details[0]
+                    thought_tokens = (
+                        getattr(first, "thinking_token_count", None)
+                        or getattr(first, "thought_token_count", None)
+                        or getattr(first, "thoughts_token_count", None)
+                        or (first.get("thought_token_count") if isinstance(first, dict) else 0)
+                        or 0
+                    )
 
         if usage:
             reported_total = getattr(usage, "total_token_count", None)

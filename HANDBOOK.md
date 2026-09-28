@@ -1,7 +1,7 @@
 # Model_Arbiter — 專案核心架構與開發者手冊 (HANDBOOK.md)
 
-> **Version**: v1.3.0-release  
-> **Last Updated**: 2026-09-27  
+> **Version**: v1.3.1-release  
+> **Last Updated**: 2026-09-28  
 > **Target Engine**: Google Gemini API (Multimodal & Reasoning Models)  
 > **Repository**: [Model_Arbiter GitHub](https://github.com/voyagermartin/Model_Arbiter.git)
 
@@ -179,3 +179,7 @@ python -m py_compile run.py web_runner.py core/*.py suites/pp_auto/*.py
 - **[Zero-Data-Retention Security Compliance]**：嚴格落實個資保護合規規範，徹底拔除線上辨識成功時的自動存檔/沉澱機制（`auto_save_benchmark_sample`），確保生產環境護照辨識「用完即焚」、零個資落地；並清理歷史殘留個資檔，替換為 1 筆純脫敏/虛構之黃金基準樣本 (`synthetic_sample`)。
 - **[Model Version Ordering & Pre-flight Radar Sweep]**：實裝 `extract_model_version_key` 排序演算法，自動將候選模型**由最新至最舊**（`gemini-3.8-flash` ➔ `gemini-3.5-flash-lite` ➔ `gemini-2.0-flash` ➔ `gemini-1.5-flash`...）依序排列展示；並在 UI 側邊欄隱藏除役模型，結合 Pre-flight Radar Sweep 預檢機制於跑分前自動排除 `DEPRECATED` 模型。
 - **[Version Control]**：通過全模組 `py_compile` 零語法錯誤驗證。
+
+### 🗓️ 2026-09-28 — v1.3.1 兩大裁判偏差修復 (Thought Tokens 與舊模型 0s 假死退避)
+- **[Thought Tokens 防禦性讀取]**：修復 `gemini-3.8-flash` 等思考模型 Thought Tokens 顯示為 0 偏差。在 `suites/pp_auto/harness.py` 實裝多層防禦性欄位抽取，支援 `thoughts_token_count`, `thinking_token_count`, `thought_token_count` 及 `candidates_token_details` / `candidates_tokens_details` 結構，精準捕捉思考 Token 與精算計費。
+- **[舊模型退避與 API 別名映射]**：修復舊世代模型與非思考模型因傳入 `thinking_config` 拋出 `ClientError` (400 Bad Request / InvalidArgument) 時暴斃顯示 0.000s 的問題。精準隔離 429 Rate Limit，並於遭遇 `thinking_config` 不支援時徹底 pop 該參數，紀錄日誌 `[INFO] 模型 {model_name} 不支援 Thinking 模式，已自動退回標準直覺推論模式重試。` 並重試成功；對退役型號引進 `MODEL_ALIASES` 別名轉向機制（如 `gemini-2.0-flash` ➔ `gemini-3.5-flash`, `gemini-1.5-flash` ➔ `gemini-flash-lite-latest`），確保所有測試模型交出真實通過率、延遲與正確分數。
