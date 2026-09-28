@@ -203,9 +203,10 @@ def get_test_image_bytes(
     return generate_synthetic_passport_image(), "備援 Mock 合成圖片 (Synthetic Sample)"
 
 
-def call_gemini_with_resilience(client, model_name: str, contents: Any, config: Any, max_retries: int = 3):
+def call_gemini_with_resilience(client, model_name: str, contents: Any, config: Any, max_retries: int = 3) -> Tuple[Any, float]:
     """
-    具備指數退避 (Exponential Backoff) 的穩健呼叫器，專門抵禦 503 High Demand 與 429 Rate Limit
+    具備指數退避 (Exponential Backoff) 的穩健呼叫器，專門抵禦 503 High Demand 與 429 Rate Limit。
+    回傳 (response, call_latency_sec)，Latency 僅包含最終單次成功呼叫之純推論時間，排除重試睡眠。
     """
     try:
         from google.genai import errors
@@ -213,12 +214,15 @@ def call_gemini_with_resilience(client, model_name: str, contents: Any, config: 
         errors = None
 
     for attempt in range(max_retries):
+        call_start = time.perf_counter()
         try:
-            return client.models.generate_content(
+            response = client.models.generate_content(
                 model=model_name,
                 contents=contents,
                 config=config
             )
+            call_latency = round(time.perf_counter() - call_start, 3)
+            return response, call_latency
         except Exception as e:
             is_server_error = errors and isinstance(e, errors.ServerError)
             is_client_error = errors and isinstance(e, errors.ClientError)
@@ -357,13 +361,11 @@ def execute_test_case(
         if thinking_obj:
             config_kwargs["thinking_config"] = thinking_obj
 
-        start_time = time.time()
-
         has_thinking = "thinking_config" in config_kwargs
 
         try:
             config = types.GenerateContentConfig(**config_kwargs)
-            response = call_gemini_with_resilience(
+            response, latency = call_gemini_with_resilience(
                 client=client,
                 model_name=model_name,
                 contents=[pil_img, prompt],
@@ -375,16 +377,14 @@ def execute_test_case(
 
             is_rate_limit = "429" in err_str or "rate limit" in err_str or "resource_exhausted" in err_str
             is_404 = "404" in err_str or "not_found" in err_str or "no longer available" in err_str
-            is_client_error = ("clienterror" in err_name.lower() or "clienterror" in err_str or (errors and isinstance(api_exc, errors.ClientError))) and not is_rate_limit and not is_404
-            is_invalid_arg = ("invalid" in err_str or "400" in err_str or "bad request" in err_str or "invalidargument" in err_name.lower()) and not is_rate_limit and not is_404
-            is_thinking_rejected = "thinking" in err_str or "thought" in err_str or "unsupported" in err_str or "unknown field" in err_str
+            is_thinking_rejected = "thinking" in err_str or "thought" in err_str or "unsupported" in err_str or "unknown field" in err_str or "budget" in err_str
 
-            if has_thinking and not is_rate_limit and not is_404 and (is_client_error or is_invalid_arg or is_thinking_rejected):
+            if has_thinking and not is_rate_limit and not is_404 and is_thinking_rejected:
                 logger.info(f"[INFO] 模型 {model_name} 不支援 Thinking 模式，已自動退回標準直覺推論模式重試。")
                 config_kwargs.pop("thinking_config", None)
                 has_thinking = False
                 config = types.GenerateContentConfig(**config_kwargs)
-                response = call_gemini_with_resilience(
+                response, latency = call_gemini_with_resilience(
                     client=client,
                     model_name=model_name,
                     contents=[pil_img, prompt],
@@ -393,42 +393,33 @@ def execute_test_case(
             else:
                 raise api_exc
 
-        latency = round(time.time() - start_time, 3)
-
         usage = getattr(response, "usage_metadata", None)
         prompt_tokens = (getattr(usage, "prompt_token_count", 0) if usage else 0) or 0
         candidate_tokens = (getattr(usage, "candidates_token_count", 0) if usage else 0) or 0
 
         # 防禦性解析 Thinking Tokens（支援不同 SDK 版本與多種模型欄位命名）
+        def _get_val(obj, k):
+            if obj is None:
+                return 0
+            if isinstance(obj, dict):
+                return obj.get(k, 0) or 0
+            return getattr(obj, k, 0) or 0
+
         thought_tokens = 0
         if usage:
             thought_tokens = (
-                getattr(usage, "thinking_token_count", None)
-                or getattr(usage, "thought_token_count", None)
-                or getattr(usage, "thoughts_token_count", None)
-                or 0
+                _get_val(usage, "thoughts_token_count")
+                or _get_val(usage, "thinking_token_count")
+                or _get_val(usage, "thought_token_count")
             )
-            if not thought_tokens and hasattr(usage, "candidates_token_details") and usage.candidates_token_details:
-                details = usage.candidates_token_details
-                if len(details) > 0:
+            if not thought_tokens:
+                details = _get_val(usage, "candidates_tokens_details") or _get_val(usage, "candidates_token_details")
+                if details and isinstance(details, (list, tuple)) and len(details) > 0:
                     first = details[0]
                     thought_tokens = (
-                        getattr(first, "thinking_token_count", None)
-                        or getattr(first, "thought_token_count", None)
-                        or getattr(first, "thoughts_token_count", None)
-                        or (first.get("thought_token_count") if isinstance(first, dict) else 0)
-                        or 0
-                    )
-            if not thought_tokens and hasattr(usage, "candidates_tokens_details") and usage.candidates_tokens_details:
-                details = usage.candidates_tokens_details
-                if len(details) > 0:
-                    first = details[0]
-                    thought_tokens = (
-                        getattr(first, "thinking_token_count", None)
-                        or getattr(first, "thought_token_count", None)
-                        or getattr(first, "thoughts_token_count", None)
-                        or (first.get("thought_token_count") if isinstance(first, dict) else 0)
-                        or 0
+                        _get_val(first, "thoughts_token_count")
+                        or _get_val(first, "thinking_token_count")
+                        or _get_val(first, "thought_token_count")
                     )
 
         if usage:

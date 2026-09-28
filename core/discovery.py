@@ -20,8 +20,7 @@ KNOWN_BASELINE_MODELS = {
     "gemini-3.8-flash",
     "gemini-3.5-flash",
     "gemini-3.5-flash-lite",
-    "gemini-3.1-flash-lite",
-    "gemini-2.5-flash-lite"
+    "gemini-3.1-flash-lite"
 }
 
 # Static fallback candidate catalog
@@ -69,12 +68,12 @@ DEFAULT_MODELS = [
     {
         "name": "gemini-2.5-flash-lite",
         "display_name": "Gemini 2.5 Flash Lite",
-        "status": "ACTIVE",
+        "status": "DEPRECATED",
         "multimodal": True,
-        "deprecated": False,
+        "deprecated": True,
         "supports_thinking": False,
-        "suggested_replacement": None,
-        "description": "Ultra lightweight cost-optimized multimodal model."
+        "suggested_replacement": "gemini-3.5-flash-lite",
+        "description": "Retired legacy model code (404 NOT_FOUND by vendor)."
     },
     {
         "name": "gemini-2.0-flash",
@@ -147,7 +146,7 @@ def probe_model_status(model_name: str, api_key: Optional[str] = None) -> Dict[s
     norm_name = model_name.lower().replace("models/", "").strip()
     
     # Check known deprecated models
-    if any(k in norm_name for k in ["2.0-flash", "1.5-flash", "1.5-pro", "2.5-flash", "2.5-pro", "1.0-pro", "deprecated", "legacy"]):
+    if any(k in norm_name for k in ["2.5-flash-lite", "2.5-flash", "2.0-flash", "1.5-flash", "1.5-pro", "2.5-pro", "1.0-pro", "deprecated", "legacy"]):
         replacement = "gemini-3.8-flash" if ("3.8" in norm_name or "2.5" in norm_name or "2.0" in norm_name) else "gemini-3.5-flash-lite"
         return {
             "name": norm_name,

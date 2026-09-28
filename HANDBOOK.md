@@ -1,6 +1,6 @@
 # Model_Arbiter — 專案核心架構與開發者手冊 (HANDBOOK.md)
 
-> **Version**: v1.4.0-release  
+> **Version**: v1.4.1-release  
 > **Last Updated**: 2026-09-28  
 > **Target Engine**: Google Gemini API (Multimodal & Reasoning Models)  
 > **Repository**: [Model_Arbiter GitHub](https://github.com/voyagermartin/Model_Arbiter.git)
@@ -188,3 +188,8 @@ python -m py_compile run.py web_runner.py core/*.py suites/pp_auto/*.py
 - **[徹底刪除 MODEL_ALIASES (No Model Aliasing)]**：徹底移除 `suites/pp_auto/harness.py` 中所有 `MODEL_ALIASES` 轉向與代打邏輯。呼叫 API 時精準傳入 requested `model_name`，杜絕幽靈端點替代，落實客觀評測天職。
 - **[Pre-flight 除役過濾與真實現役模型池]**：於 `core/discovery.py` 與 `core/evaluator.py` 強化 Pre-flight Radar Filter，對於 API 探測回傳 `404 NOT_FOUND` 或標記為 `DEPRECATED` 之模型（如 `gemini-2.0-flash`, `gemini-1.5-flash`），一律於評測前自動過濾排除，絕不上榜或匯出至 `active_configs/pp_auto_model.json`，防止生產環境誤呼叫斷線；更新 `DEFAULT_MODELS` 為現役 Gemini 模型池 (`gemini-3.8-flash`, `gemini-3.5-flash`, `gemini-3.5-flash-lite`, `gemini-3.1-flash-lite`, `gemini-2.5-flash-lite`)。
 - **[Thinking Fallback 機制保留]**：保留當現役模型因不支援 `thinking_config` 拋出 ClientError/400 時，自動剝離思考參數退回直覺推論模式重試之穩健機制。
+
+### 🗓️ 2026-09-28 — v1.4.1 診斷 3.5-flash 思考機制、徹底清除 2.5-flash-lite 除役模型與排他計時修復
+- **[3.5-Flash 思考漏洞排查與動態 Thinking Budget 優化]**：診斷出過往固定傳遞 `thinking_budget: 1024` 會導致 `gemini-3.5-flash` 於 Schema 結構輸出時抑制 Thinking (`thoughts_token_count=None`)。將 `suites/pp_auto/manifest.json` 之 `thinking_config` 更新為動態 `{}`，實測 `gemini-3.5-flash` 可產生 1295+ 思考 Tokens，成本精算回歸真實公平競賽。
+- **[徹底清除除役模型 gemini-2.5-flash-lite]**：將回傳 404 NOT_FOUND 之 `gemini-2.5-flash-lite` 徹底自 `KNOWN_BASELINE_MODELS` 移除並於 `core/discovery.py` 與 `core/model_registry.json` 標記為 `DEPRECATED`。現役測試佇列收斂為：`gemini-3.5-flash`, `gemini-3.1-flash-lite`, `gemini-3.5-flash-lite`, `gemini-3.8-flash`。
+- **[排他計時重構 (Pure Latency)]**：重構 `suites/pp_auto/harness.py` 內 `call_gemini_with_resilience` 延遲計數器，以 `time.perf_counter()` 僅封裝最後一次成功 API 發起至 response 取得之純推論時間，完全排除 429/503 退避重試睡眠時間，平均延遲回歸 1.8s ~ 3.5s 常態。

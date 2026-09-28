@@ -6,9 +6,7 @@
     "temperature": 0.0,
     "top_p": 0.95,
     "response_mime_type": "application/json",
-    "thinking_config": {
-      "thinking_budget": 1024
-    }
+    "thinking_config": {}
   },
   "prompt_file": "prompt.txt"
 }
